@@ -1,19 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Circle, Pause, Play, Square, X, Upload, Sparkles, Save, Trash2, Camera } from "lucide-react";
+import { Circle, Pause, Play, Square, X, Upload, Sparkles, Save, Trash2, Camera, Pencil } from "lucide-react";
 import ModelPicker from "@/components/ModelPicker";
 import { api, Badge, Btn, Card, inputCls, Notice, PageHeader, useProject } from "@/components/ui";
-import { addFrame, analyze, dhash, type PageGroup } from "@/lib/perception";
+import { addFrame, analyze, dhash, type Candidate, type PageGroup } from "@/lib/perception";
 import { CONTROL_TYPES, PERCEPTION_MODEL, type ControlType } from "@/lib/types";
 
 type Item = {
   id: string; x: number; y: number; w: number; h: number;
   type: ControlType | "unknown"; label: string; confidence: number; evidence: string; hash: string;
   include: boolean; source: "perception" | "ai"; perceptionType: string; aiModel: string | null;
+  controlId?: string;
 };
-type SavedScreen = { id: string; name: string; groupKey: string; width: number; height: number; frameCount: number; source: string; aiModel: string | null; controls: { id: string; type: string; label: string; confidence: number }[] };
+type SavedControl = { id: string; type: ControlType; label: string; x: number; y: number; w: number; h: number; confidence: number; evidence: string; locatorHash: string; perceptionLabel: string; aiModel: string | null; source: string };
+type SavedScreen = { id: string; recordingId: string | null; name: string; groupKey: string; width: number; height: number; frameCount: number; timestampMs: number; source: string; aiModel: string | null; controls: SavedControl[] };
 type SavedRec = { id: string; name: string; durationMs: number; sizeBytes: number; sha256: string; createdAt: string };
+type EditMeta = { screenId: string; groupKey: string };
 
 const COLORS: Record<string, string> = { input: "#2563eb", button: "#7c3aed", dropdown: "#0891b2", date_picker: "#0d9488", checkbox: "#d97706", toggle: "#ea580c", slider: "#db2777", upload: "#65a30d", download: "#16a34a", unknown: "#94a3b8" };
 
@@ -54,6 +57,7 @@ export default function ScanPage() {
   const [elapsed, setElapsed] = useState(0);
   const [blob, setBlob] = useState<{ blob: Blob; ms: number } | null>(null);
   const [recordingId, setRecordingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Record<string, EditMeta>>({});
   const [capture, setCapture] = useState({ url: "", w: 1280, h: 800 });
   const [every, setEvery] = useState(1);
 
@@ -92,7 +96,7 @@ export default function ScanPage() {
     setSel((s) => s || next[0].key);
   }, []);
 
-  const resetAll = () => { groupsRef.current = []; setGroups([]); setItems({}); setSel(""); setBlob(null); setRecordingId(null); };
+  const resetAll = () => { groupsRef.current = []; setGroups([]); setItems({}); setSel(""); setBlob(null); setRecordingId(null); setEditing({}); };
 
   /* ---------- recorder ---------- */
   const sample = useCallback(() => {
@@ -204,6 +208,69 @@ export default function ScanPage() {
     finally { setBusy(""); }
   };
 
+  /* ---------- saved-scan editing ---------- */
+  const editSavedScreens = async (input: SavedScreen[]) => {
+    if (!input.length) {
+      setMsg({ kind: "warn", text: "No saved screen scan is associated with this recording yet. Rescan it and save the page groups first." });
+      return;
+    }
+    try {
+      setBusy("Loading saved scan for editing…");
+      setMsg(null);
+      resetAll();
+      const list = [...input].sort((a, b) => a.timestampMs - b.timestampMs || a.name.localeCompare(b.name));
+      const nextGroups: PageGroup[] = [];
+      const nextItems: Record<string, Item[]> = {};
+      const meta: Record<string, EditMeta> = {};
+      for (const s of list) {
+        const dataUrl = `/api/screens/${s.id}`;
+        const img = await loadImg(dataUrl);
+        const base = analyze(img, s.width, s.height);
+        const candidates: Candidate[] = s.controls.map((c) => ({ id: c.id, x: c.x, y: c.y, w: c.w, h: c.h, type: c.type, confidence: c.confidence, evidence: c.evidence, hash: c.locatorHash }));
+        const key = `saved-${s.id}`;
+        nextGroups.push({
+          key,
+          name: s.name,
+          frames: s.frameCount,
+          firstMs: s.timestampMs,
+          lastMs: s.timestampMs,
+          rep: { dataUrl, width: s.width, height: s.height, tMs: s.timestampMs, analysis: { ...base, candidates } },
+          sig: base.signature,
+        });
+        nextItems[key] = s.controls.map((c) => ({
+          id: c.id,
+          controlId: c.id,
+          x: c.x,
+          y: c.y,
+          w: c.w,
+          h: c.h,
+          type: c.type,
+          label: c.label,
+          confidence: c.confidence,
+          evidence: c.evidence,
+          hash: c.locatorHash,
+          include: true,
+          source: c.source === "ai" ? "ai" : "perception",
+          perceptionType: c.perceptionLabel.split(":").pop() || c.type,
+          aiModel: c.aiModel,
+        }));
+        meta[key] = { screenId: s.id, groupKey: s.groupKey };
+      }
+      groupsRef.current = nextGroups;
+      setGroups(nextGroups);
+      setItems(nextItems);
+      setEditing(meta);
+      setSel(nextGroups[0]?.key ?? "");
+      setRecordingId(list[0].recordingId);
+      setTab("upload");
+      setMsg({ kind: "ok", text: `Loaded ${list.length} saved page/window group(s) for editing. Adjust labels, types or included controls, then Save all to update them without duplication.` });
+    } catch (e) {
+      setMsg({ kind: "error", text: e instanceof Error ? e.message : "Could not load the saved scan" });
+    } finally {
+      setBusy("");
+    }
+  };
+
   /* ---------- AI enrichment ---------- */
   const enrich = async () => {
     const g = groups.find((x) => x.key === sel);
@@ -251,13 +318,47 @@ export default function ScanPage() {
         rid = (await r.json()).id; setRecordingId(rid);
       }
       let total = 0;
+      let created = 0;
+      let updated = 0;
+      const nextEditing = { ...editing };
       for (const g of groups) {
         const ctl = (items[g.key] ?? []).filter((i) => i.include && i.type !== "unknown");
         total += ctl.length;
-        await api("/api/screens", { json: { projectId: current.id, recordingId: rid, name: g.name, groupKey: g.key, source: rid ? "recording" : "screenshot", width: g.rep.width, height: g.rep.height, imageDataUrl: g.rep.dataUrl, frameCount: g.frames, timestampMs: g.rep.tMs, aiModel: ctl.find((c) => c.aiModel)?.aiModel ?? null,
-          controls: ctl.map((c) => ({ type: c.type, label: c.label, x: c.x, y: c.y, w: c.w, h: c.h, confidence: c.confidence, evidence: c.evidence, locatorHash: c.hash, perceptionLabel: `${PERCEPTION_MODEL}:${c.perceptionType}`, aiModel: c.aiModel, source: c.source })) } });
+        const meta = editing[g.key];
+        const payload = {
+          name: g.name,
+          groupKey: meta?.groupKey ?? g.key,
+          frameCount: g.frames,
+          timestampMs: g.rep.tMs,
+          aiModel: ctl.find((c) => c.aiModel)?.aiModel ?? null,
+          controls: ctl.map((c) => ({ id: c.controlId, type: c.type, label: c.label, x: c.x, y: c.y, w: c.w, h: c.h, confidence: c.confidence, evidence: c.evidence, locatorHash: c.hash, perceptionLabel: `${PERCEPTION_MODEL}:${c.perceptionType}`, aiModel: c.aiModel, source: c.source })),
+        };
+        let savedControls: { id: string }[];
+        if (meta) {
+          const updatedScreen = await api<{ controls: { id: string }[] }>(`/api/screens/${meta.screenId}`, { method: "PUT", json: payload });
+          savedControls = updatedScreen.controls;
+          nextEditing[g.key] = meta;
+          updated++;
+        } else {
+          const createdScreen = await api<{ id: string; controls: { id: string }[] }>("/api/screens", { json: { ...payload, projectId: current.id, recordingId: rid, source: rid ? "recording" : "screenshot", width: g.rep.width, height: g.rep.height, imageDataUrl: g.rep.dataUrl } });
+          savedControls = createdScreen.controls;
+          nextEditing[g.key] = { screenId: createdScreen.id, groupKey: payload.groupKey };
+          created++;
+        }
+        // Adopt server IDs for new controls so every later save preserves scenario bindings too.
+        let controlIndex = 0;
+        setItems((prev) => ({
+          ...prev,
+          [g.key]: (prev[g.key] ?? []).map((item) => {
+            if (!item.include || item.type === "unknown") return item;
+            const savedControl = savedControls[controlIndex++];
+            return savedControl ? { ...item, id: savedControl.id, controlId: savedControl.id } : item;
+          }),
+        }));
+        // Checkpoint IDs so a retry after a partial failure updates instead of duplicating.
+        setEditing({ ...nextEditing });
       }
-      setMsg({ kind: "ok", text: `Saved ${groups.length} page/window group(s) with ${total} controls${rid ? " and the recording" : ""}.` });
+      setMsg({ kind: "ok", text: `Saved ${groups.length} page/window group(s) with ${total} controls (${updated} updated, ${created} created)${rid ? " linked to the recording" : ""}.` });
       await refresh();
     } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : "Save failed" }); }
     finally { setBusy(""); }
@@ -265,15 +366,17 @@ export default function ScanPage() {
 
   const group = groups.find((g) => g.key === sel);
   const list = (group && items[group.key]) || [];
+  const editingCount = Object.keys(editing).length;
   const upd = (id: string, p: Partial<Item>) => setItems((m) => ({ ...m, [sel]: (m[sel] ?? []).map((i) => (i.id === id ? { ...i, ...p } : i)) }));
 
   return (
     <>
-      <PageHeader title="Record & Visual Scan" subtitle="Record the full screen or supply screenshots/video. Client perception (luminance → Sobel → density grid → connected components → merged regions) proposes controls, grouped per page or window; an optional multimodal model labels them.">
+      <PageHeader title="Record & Visual Scan" subtitle="Record, upload or capture evidence, then save and re-edit page/window controls. Client perception proposes geometry; an optional multimodal model supplies semantics. Saved controls feed visual-only Test Scenarios.">
         <ModelPicker task="visual_scan" onChange={setLocalModel} />
       </PageHeader>
       {msg && <div className="mb-3"><Notice kind={msg.kind}>{msg.text}</Notice></div>}
       {!current && <Notice kind="warn">Select or create a project first.</Notice>}
+      {editingCount > 0 && <div className="mb-3"><Notice kind="info">Editing {editingCount} saved screen(s). Save changes updates the existing rows and preserves unchanged control IDs for scenario bindings. Clear to discard this editing session.</Notice></div>}
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[360px_1fr]">
         <Card title="Evidence source">
@@ -313,7 +416,8 @@ export default function ScanPage() {
                     <div key={r.id} className="flex items-center justify-between gap-2 rounded border p-2">
                       <span className="truncate">{r.name} · {fmt(r.durationMs)} · {(r.sizeBytes / 1e6).toFixed(1)} MB</span>
                       <span className="flex gap-1">
-                        <Btn className="!px-2 !py-0.5 text-xs" onClick={async () => { try { setBusy("Loading recording…"); await scanVideo(`/api/recordings/${r.id}`); setRecordingId(r.id); } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : "Scan failed" }); } finally { setBusy(""); } }}>Scan</Btn>
+                        <Btn className="!px-2 !py-0.5 text-xs" title="Load the saved controls and page groups for update-in-place editing" onClick={() => void editSavedScreens(saved.filter((s) => s.recordingId === r.id))}><Pencil size={12} /> Edit saved</Btn>
+                        <Btn className="!px-2 !py-0.5 text-xs" title="Discard the current editor and analyze the recording frames again" onClick={async () => { try { resetAll(); setMsg(null); setBusy("Loading recording…"); await scanVideo(`/api/recordings/${r.id}`); setRecordingId(r.id); } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : "Scan failed" }); } finally { setBusy(""); } }}>Rescan</Btn>
                         <Btn variant="danger" className="!px-2 !py-0.5 text-xs" onClick={async () => { await api(`/api/recordings/${r.id}`, { method: "DELETE" }); void refresh(); }}><Trash2 size={12} /></Btn>
                       </span>
                     </div>
@@ -333,7 +437,7 @@ export default function ScanPage() {
           {busy && <div className="mt-3 animate-pulse text-sm text-indigo-700">{busy}</div>}
         </Card>
 
-        <Card title={`Page / window groups (${groups.length})`} actions={groups.length > 0 && <div className="flex gap-2"><Btn onClick={resetAll}>Clear</Btn><Btn variant="success" onClick={saveAll} disabled={!!busy}><Save size={14} /> Save all</Btn></div>}>
+        <Card title={`Page / window groups (${groups.length})`} actions={groups.length > 0 && <div className="flex gap-2"><Btn onClick={resetAll}>Clear</Btn><Btn variant="success" onClick={saveAll} disabled={!!busy}><Save size={14} /> {editingCount ? "Save changes" : "Save all"}</Btn></div>}>
           {groups.length === 0 ? (
             <p className="py-10 text-center text-sm text-slate-500">No evidence yet. Record, upload or capture to see detected pages and controls.</p>
           ) : (
@@ -406,7 +510,10 @@ export default function ScanPage() {
                 <img src={`/api/screens/${s.id}`} alt={s.name} className="h-28 w-full rounded object-cover object-top" />
                 <div className="mt-1 flex items-center justify-between gap-1">
                   <div className="truncate text-sm font-semibold">{s.name}</div>
-                  <Btn variant="danger" className="!px-1.5 !py-0.5" onClick={async () => { await api(`/api/screens/${s.id}`, { method: "DELETE" }); void refresh(); }}><Trash2 size={12} /></Btn>
+                  <div className="flex gap-1">
+                    <Btn className="!px-1.5 !py-0.5" title="Re-edit this saved scan" onClick={() => void editSavedScreens([s])}><Pencil size={12} /></Btn>
+                    <Btn variant="danger" className="!px-1.5 !py-0.5" onClick={async () => { await api(`/api/screens/${s.id}`, { method: "DELETE" }); void refresh(); }}><Trash2 size={12} /></Btn>
+                  </div>
                 </div>
                 <div className="text-xs text-slate-500">{s.controls.length} controls · {s.width}×{s.height} · {s.groupKey} · {s.source}</div>
                 {s.aiModel && <div className="text-[11px] text-indigo-700">AI: {s.aiModel}</div>}
