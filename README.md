@@ -21,3 +21,8 @@ Every feature (visual scan, document analysis, test scenarios, workflow creation
 Install the browser once: `npx playwright install chromium` (Linux: add `--with-deps`). Try the built-in target at `/demo-target`.
 
 `rasq-ai.*` nodes in exported workflows are executed by RASQ-Ai; stock n8n shows them as unknown nodes.
+
+## Agent documentation
+
+- [Master Prompt](./MASTER_PROMPT.md) — reusable instructions for AI coding, QA, security, and architecture tasks, including RASQ-Ai's non-negotiable evidence, privacy, visual-locator, and traceability rules.
+- [Context Memory](./CONTEXT_MEMORY.md) — a point-in-time architecture and behavior handoff covering routes, persistence, AI routing, perception, workflows, runs, reports, known constraints, and validation commands. Verify it against the current source and update it when architecture changes.
