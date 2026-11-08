@@ -56,7 +56,10 @@ function Editor() {
     if (!current) return;
     const l = await api<WfRow[]>(`/api/workflows?projectId=${current.id}`);
     setList(l);
-    setWfId((c) => (l.some((w) => w.id === c) ? c : l[0]?.id ?? ""));
+    const requested = new URLSearchParams(window.location.search).get("workflow");
+    const deepLinked = requested && l.some((w) => w.id === requested) ? requested : null;
+    setWfId((c) => deepLinked ?? (l.some((w) => w.id === c) ? c : l[0]?.id ?? ""));
+    if (deepLinked) window.history.replaceState(null, "", window.location.pathname);
   }, [current]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadList(); }, [loadList]);

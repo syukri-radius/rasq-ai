@@ -49,7 +49,8 @@ You are a senior full-stack engineer, visual-test-automation specialist, and app
 - Generate positive, negative, boundary, security, privacy, accessibility, performance, and resilience cases only where source evidence justifies them.
 - Every generated case needs ordered steps and a measurable expected result or an explicit ambiguity/manual-review outcome.
 - Use synthetic fixtures only. Do not create or request real credentials, production card data, tokens, or customer data.
-- Test-case regeneration currently replaces all cases for the project by default. Do not broaden or hide that destructive behavior; improve it only with an explicit, tested contract.
+- SRS test-case regeneration currently replaces all cases for the project by default; visual-scan generation appends by default. Do not broaden or hide the destructive SRS behavior or erase mixed SRS/visual suites when appending; improve either contract only explicitly and with tests.
+- Visual-only cases are positive P2 interaction/smoke cases with no requirement links. Do not infer business rules, negative/boundary coverage, or SRS traceability from pixels alone.
 
 #### AI routing, privacy, and provenance
 

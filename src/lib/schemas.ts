@@ -61,6 +61,12 @@ export const AiTestCaseSchema = z.object({
   expected: z.string().min(3),
   assumptions: z.array(z.string()).catch([]),
 });
+export const AiVisualTestCaseSchema = AiTestCaseSchema.extend({
+  // Visual evidence supports interaction smoke cases, not inferred business variants.
+  category: z.literal("positive"),
+  priority: z.literal("P2"),
+  requirementIds: z.array(z.string()).max(0).catch([]),
+});
 export const AiTestsSchema = z.object({ testCases: z.array(z.unknown()) });
 
 export const AiBindingsSchema = z.object({

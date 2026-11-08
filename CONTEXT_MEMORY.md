@@ -8,11 +8,11 @@ Point-in-time repository handoff for AI agents and maintainers. Read this with [
 |---|---|
 | Repository | `syukri-radius/rasq-ai` |
 | Product | **RASQ-Ai — trustworthy visual test automation** |
-| Source snapshot reviewed | `9dd7bc32feb24b36c18b03b65d443c0855694f41` (`first commit`) |
-| Memory generated | 2026-11-08 |
-| Review method | Static review of all tracked application, database, configuration, and documentation source |
-| Runtime validation at generation | Not run; dependencies and Playwright browsers were not installed in the reviewed checkout |
-| Application size at snapshot | 4,257 lines across tracked files under `src/` |
+| Source snapshot reviewed | `2dee1081107768dd191383f77c2e27acd1fed4f0` (visual scenario generation feature commit) plus this documentation update |
+| Memory generated / updated | 2026-11-08 |
+| Review method | Static source review plus typecheck, lint, production build, and isolated API/dry-run integration checks |
+| Runtime validation at update | Typecheck/build and route integration passed; lint passed with eight unused-disable warnings. Real Chromium execution was not run because the sandbox could not download the browser from `cdn.playwright.dev`. |
+| Application size at snapshot | 4,675 lines across tracked files under `src/` |
 | License file | `Commercial Standard License`, naming PT Radius Data Solusi; see `LICENSE` for its usage/redistribution restrictions and remaining template language |
 
 This document describes the snapshot above. Later commits may invalidate details. Statements in **Known constraints** are observations, not automatically approved feature work.
@@ -36,6 +36,12 @@ PDF / Markdown / text SRS
 requirements + saved controls
   → local rules or optional AI test design
   → test cases + many-to-many requirement traceability
+
+OR saved screens + visual controls, without an SRS
+  → positive P2 visual-interaction cases with bound anchors and no requirement links
+
+either case source
+  → filtered cases convertible in Test Scenarios to saved/downloadable n8n JSON
   → n8n-shaped workflow JSON + ReactFlow editor
   → dry-run validation or in-process Playwright execution
   → run steps + evidence JSON + screenshots
@@ -94,7 +100,9 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 | `src/lib/cases.ts` | Test-case loading with requirement keys |
 | `src/lib/n8n.ts` | Workflow generation/validation and n8n ↔ ReactFlow conversion |
 | `src/lib/runner.ts` | URL guard, screenshot capture, visual actions/assertions, run persistence |
-| `src/lib/schemas.ts` | Zod schemas for AI responses and test steps |
+| `src/lib/schemas.ts` | Zod schemas for AI responses, SRS cases, and constrained visual-only cases |
+| `src/lib/screens.ts` | Shared saved-control normalization for screen creation and update-in-place editing |
+| `src/lib/visualCases.ts` | Deterministic positive P2 interaction cases from saved visual controls |
 | `src/lib/types.ts` | Shared control/task/action/category/priority/status constants |
 | `src/lib/api.ts` | `ok`, `fail`, `body`, async route `Params` helpers |
 | `src/db/schema.ts` | Sixteen Drizzle tables and relationships |
@@ -189,10 +197,10 @@ data/runs/<runId>/<position>.jpg
 | Route | Purpose |
 |---|---|
 | `/` | Global artifact/run counts, latest runs, pipeline overview |
-| `/scan` | Record full screen; upload images/video; capture URL; edit and save visual controls |
+| `/scan` | Record/upload/capture; save controls; reopen recording or individual screen scans and update them in place |
 | `/requirements` | Add PDF/MD/TXT or pasted SRS; inspect documents, criteria, and ambiguity |
-| `/tests` | Generate/replace cases, filter cases, view matrix, export CSV/JSON |
-| `/workflows` | Generate/import/edit/export workflows; dry-run or execute; inspect evidence |
+| `/tests` | Generate from SRS or selected saved scans, filter cases, view matrix, export CSV/JSON, convert displayed cases to n8n |
+| `/workflows` | Open a converted workflow by `?workflow=<id>`, generate/import/edit/export, dry-run or execute, inspect evidence |
 | `/reports` | Generate and download evidence-based Markdown reports |
 | `/settings` | AI data-sharing switch, per-task models, provider catalog, policies |
 | `/demo-target` | Safe synthetic checkout target; no real payment processing |
@@ -213,10 +221,10 @@ The `ok` helper returns the supplied JSON payload directly, not wrapped in a `da
 | `/api/ai/scan` | `POST`: enrich supplied candidates/image using `visual_scan`; Local selection returns HTTP 409 |
 | `/api/recordings` | `GET[?projectId=]`; multipart `POST`: save recording and SHA-256 metadata |
 | `/api/recordings/:id` | `GET`: binary recording; `DELETE`: file and row |
-| `/api/screens` | `GET[?projectId=]`: screens with controls; `POST`: save image data URL and selected controls |
-| `/api/screens/:id` | `GET`: binary image; `DELETE`: image and row |
+| `/api/screens` | `GET[?projectId=&recordingId=]`: screens with controls; `POST`: save image/controls and return persisted control IDs |
+| `/api/screens/:id` | `GET`: binary image; `PUT`: update metadata/controls while retaining unchanged control IDs; `DELETE`: image and row |
 | `/api/requirements` | `GET?projectId=`; multipart `POST`: parse/extract/persist; `DELETE?docId=` |
-| `/api/tests` | `GET?projectId=`; `POST`: generate cases; `DELETE?id=` or `?projectId=` |
+| `/api/tests` | `GET?projectId=`; `POST`: generate from `source: requirements|visual`, with optional screen selection and replace behavior; `DELETE?id=` or `?projectId=` |
 | `/api/tests/export` | `GET?projectId=&format=csv|json`: download cases |
 | `/api/workflows` | `GET[?projectId=]`; `POST`: `generate`, `import`, or `blank` |
 | `/api/workflows/:id` | `GET`; `PUT`: validate/save and increment version; `DELETE` |
@@ -324,7 +332,7 @@ Calls use `AbortSignal.timeout(180_000)`. `parseJson` tolerates Markdown fences 
 
 - **Visual scan:** requires a non-Local provider. Sends at most 120 candidates; accepts known candidate IDs only, and at most 30 in-bounds missed controls. Candidate coordinates cannot be changed by AI.
 - **Document analysis:** local parser always runs first. AI receives at most 60,000 redacted characters. Returned IDs not literally present in source text are rejected.
-- **Test scenarios:** AI processes requirements in batches of six and receives at most 150 bindable controls. Malformed cases are dropped with warnings; unknown requirement/control IDs are removed or rejected.
+- **Test scenarios:** SRS mode processes requirements in batches of six and receives at most 150 bindable controls. Visual mode processes saved controls in batches of 50, requires positive P2 cases with empty requirement IDs, a navigate/assert envelope, and supplied control IDs on every interaction. Malformed or unbound cases are dropped with warnings; textual data is redacted.
 - **Workflow creation:** AI only proposes bindings and assertion kinds for open steps. Control IDs must exist in the supplied visual-control map.
 - **Report generation:** AI receives computed project statistics only, wrapped as untrusted data, and is instructed not to invent execution/pass rates.
 
@@ -372,6 +380,8 @@ input, button, dropdown, date_picker, checkbox, toggle, slider, upload, download
 - AI enrichment resizes the source to a longest side of at most 1568 pixels, maps candidate boxes into that coordinate system, and maps AI-added missed boxes back to source pixels.
 - AI-added controls have confidence capped at 0.6 and receive a hash computed from the original image.
 - Saving persists only selected, known control types. Screen rows always record `rasq-perception-v1`; AI provenance is stored separately.
+- **Edit saved** on a recording loads all associated saved screens; the pencil action on a saved screen loads just that screen. Labels, types, names, and included controls can be changed without rescanning pixels.
+- `PUT /api/screens/:id` updates the existing row rather than duplicating it. Create/update responses return persisted controls, and the client adopts server IDs for new controls so repeated saves preserve unchanged anchor IDs used by scenarios/workflows. **Rescan** remains a separate fresh frame-analysis path.
 
 ---
 
@@ -405,15 +415,21 @@ The original full extracted text and its SHA-256 are stored even when AI assists
 
 Priority rules: payment/security/privacy/integrity-like content is P0; core behavior defaults to P1; boundary/non-functional/negative cases are P2; cosmetic/optional polish is P3.
 
+### Visual-only local cases
+
+`designVisualCases` creates one positive P2 interaction case per selected saved control. Each case starts with `navigate`, binds its interaction to the saved control ID, and ends with an observable-outcome `assert`. Control types map to type/click/select/check/toggle/slider/upload/download as appropriate; inputs use synthetic fixtures and password-like labels use vault placeholders.
+
+These cases deliberately have no requirement IDs and do not imply business-rule, negative, boundary, or security coverage. Low-confidence anchors and manual-review limitations are recorded as assumptions. Visual generation appends by default so it does not erase SRS-based cases.
+
 ### Generation and traceability
 
-`POST /api/tests` accepts `projectId`, `docId`, optional `screenIds`, and optional `replace`.
+`POST /api/tests` accepts `projectId`, `source` (`requirements` by default, or `visual`), optional `docId`, optional `screenIds`, and optional `replace`.
 
-- Local mode designs cases for every requirement in the selected document.
-- AI mode validates each case with `AiTestCaseSchema`, renumbers steps, validates control IDs, and redacts generated data.
-- By default (`replace !== false`), **all test cases for the project are deleted** before insertion, even though generation uses one selected document.
-- Case keys are assigned as `TC-001`, `TC-002`, etc., based on existing count when appending.
-- Requirement links are persisted in `test_traceability`; a case can link to many requirements and vice versa.
+- SRS Local mode designs cases for every requirement in the selected document; visual Local mode designs cases for every control on selected saved screens. An omitted/empty screen selection means all project screens.
+- AI mode validates SRS cases with `AiTestCaseSchema` and visual cases with `AiVisualTestCaseSchema`, renumbers steps, validates control IDs, and redacts generated data.
+- SRS generation defaults to replacement: **all existing test cases for the project are deleted** before insertion. Visual generation defaults to append (`replace ?? !visual`).
+- Case keys are assigned as `TC-001`, `TC-002`, etc. Appending starts after the highest existing numeric key rather than using row count, so deletions do not cause collisions.
+- SRS requirement links are persisted in `test_traceability`; a case can link to many requirements and vice versa. Visual-only cases intentionally have no link rows and display as “Visual only.”
 - CSV export quotes fields; JSON export removes internal row ID/project/creation fields but retains requirement keys and provenance.
 
 ---
@@ -423,6 +439,8 @@ Priority rules: payment/security/privacy/integrity-like content is P0; core beha
 ### n8n-shaped workflow model
 
 Generated workflows begin with Manual Trigger and Open Target, followed by a no-op section and ordered steps for each selected case. Default viewport is 1280×800.
+
+The Test Scenarios page can convert the currently displayed/filtered cases through the existing workflow generator. It saves a runnable workflow, offers its n8n JSON as a download, and deep-links to `/workflows?workflow=<id>` for the live monitor. This uses the same bindings and unresolved-anchor reporting as workflow generation on the Workflows page.
 
 Custom node types:
 
@@ -530,7 +548,7 @@ These are current-source facts to preserve or address intentionally, not claims 
 7. **Redaction is textual and heuristic:** images are not sanitized, and regexes cannot guarantee removal of all secrets or personal data.
 8. **Filesystem cleanup is incomplete for run evidence:** deleting a workflow cascades database runs/steps but does not delete run screenshot directories in the reviewed handler.
 9. **Seed is empty-database oriented:** adding seed policies/providers does not update an existing populated database automatically.
-10. **Regeneration is broad by default:** generating from one SRS replaces the project's full case set unless `replace: false` is supplied.
+10. **SRS regeneration is broad by default:** generating from one SRS replaces the project's full case set unless `replace: false` is supplied. Visual generation appends by default; repeated visual generation can therefore create repeated interactions intentionally.
 11. **Visual assertions have limited oracles:** pixel change and region change do not establish semantic correctness or exact control state.
 12. **Custom n8n nodes are not stock-n8n executables:** compatibility refers to workflow JSON structure/import/export, not availability of RASQ-Ai custom nodes in n8n itself.
 13. **Starter metadata remains:** package name and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
@@ -548,13 +566,16 @@ When dependencies and Chromium are available, this path exercises the main local
 3. Open `/demo-target` and confirm the synthetic checkout works.
 4. In `/scan`, select the demo project and capture `/demo-target` at 1280×800.
 5. Review geometric candidates; manually correct/save only defensible visible controls.
-6. In `/requirements`, use the seeded sample SRS or upload a synthetic ID-prefixed document.
-7. In `/tests`, generate Local cases and verify exact requirement links, ordered steps, and expected results.
-8. In `/workflows`, generate a workflow; verify unresolved anchors are visible and dry run executes nothing.
-9. Run Playwright only against the synthetic demo target. Inspect anchor scores, step statuses, messages, and screenshots.
-10. Generate a report and verify it separates generated coverage from observed run evidence.
-11. Toggle the AI kill switch and verify provider-backed operations cannot make a model call.
-12. Delete isolated test data/artifacts afterward; do not commit the database or evidence files.
+6. Reopen the saved recording/screen with **Edit saved**, change a label/type, and save. Confirm no duplicate screen appears and unchanged control IDs survive another save.
+7. In `/requirements`, use the seeded sample SRS or upload a synthetic ID-prefixed document.
+8. In `/tests`, generate Local SRS cases and verify exact requirement links, ordered steps, and expected results.
+9. Switch to **From saved visual scans**, select screens, and append visual cases. Confirm positive P2 interactions, bound anchors, empty requirement links, and unique case keys.
+10. Filter the case list and choose **Convert displayed to n8n**. Download the JSON and use **Open & run in Workflows**; confirm the same workflow and anchors loaded.
+11. Verify unresolved anchors are visible and dry run executes nothing.
+12. Run Playwright only against the synthetic demo target. Inspect anchor scores, step statuses, messages, and screenshots.
+13. Generate a report and verify it separates generated coverage from observed run evidence; visual-only cases must not increase SRS coverage.
+14. Toggle the AI kill switch and verify provider-backed operations cannot make a model call.
+15. Delete isolated test data/artifacts afterward; do not commit the database or evidence files.
 
 This is a manual checklist, not evidence that the path has already passed.
 
