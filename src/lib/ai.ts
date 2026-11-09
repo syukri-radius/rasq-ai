@@ -2,6 +2,7 @@ import { eq, desc } from "drizzle-orm";
 import type { Db } from "@/db";
 import { aiProviders, modelRoutes, policies, settings } from "@/db/schema";
 import type { Task } from "./types";
+import { callProtocolProvider } from "./aiProtocols";
 
 export type ProviderRow = typeof aiProviders.$inferSelect;
 export type Route =
@@ -70,77 +71,11 @@ export function parseJson(text: string): unknown {
   return JSON.parse(s);
 }
 
-function splitDataUrl(u: string): { mime: string; data: string } {
-  const m = /^data:([^;]+);base64,(.+)$/.exec(u);
-  if (!m) throw new Error("Image must be a base64 data URL");
-  return { mime: m[1], data: m[2] };
-}
-
 export async function callModel(
   route: Extract<Route, { local: false }>,
   args: { system: string; user: string; images?: string[] },
 ): Promise<string> {
-  const { provider: p, model } = route;
-  const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] ?? "" : "";
-  const images = args.images ?? [];
-  let url: string;
-  let headers: Record<string, string> = { "content-type": "application/json" };
-  let body: unknown;
-  const base = p.baseUrl.replace(/\/+$/, "");
-  if (p.kind === "anthropic") {
-    url = `${base || "https://api.anthropic.com"}/v1/messages`;
-    headers = { ...headers, "x-api-key": key, "anthropic-version": "2023-06-01" };
-    body = {
-      model,
-      max_tokens: 8192,
-      system: args.system,
-      messages: [
-        {
-          role: "user",
-          content: [
-            ...images.map((i) => {
-              const d = splitDataUrl(i);
-              return { type: "image", source: { type: "base64", media_type: d.mime, data: d.data } };
-            }),
-            { type: "text", text: args.user },
-          ],
-        },
-      ],
-    };
-  } else if (p.kind === "gemini") {
-    url = `${base || "https://generativelanguage.googleapis.com/v1beta"}/models/${encodeURIComponent(model)}:generateContent`;
-    headers = { ...headers, "x-goog-api-key": key };
-    body = {
-      systemInstruction: { parts: [{ text: args.system }] },
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: args.user }, ...images.map((i) => { const d = splitDataUrl(i); return { inlineData: { mimeType: d.mime, data: d.data } }; })],
-        },
-      ],
-      generationConfig: { responseMimeType: "application/json" },
-    };
-  } else {
-    url = `${base || "https://api.openai.com/v1"}/chat/completions`;
-    if (key) headers = { ...headers, authorization: `Bearer ${key}` };
-    body = {
-      model,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: args.system },
-        { role: "user", content: [{ type: "text", text: args.user }, ...images.map((i) => ({ type: "image_url", image_url: { url: i } }))] },
-      ],
-    };
-  }
-  const res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal: AbortSignal.timeout(180_000) });
-  const raw = await res.text();
-  if (!res.ok) {
-    throw new Error(`${p.name} returned HTTP ${res.status}: ${raw.slice(0, 300).replace(key || "\u0000", "[key]")}`);
-  }
-  const j = JSON.parse(raw);
-  if (p.kind === "anthropic") return (j.content ?? []).map((c: { text?: string }) => c.text ?? "").join("");
-  if (p.kind === "gemini") return (j.candidates?.[0]?.content?.parts ?? []).map((c: { text?: string }) => c.text ?? "").join("");
-  return j.choices?.[0]?.message?.content ?? "";
+  return callProtocolProvider(route.provider, route.model, args);
 }
 
 export function provenanceOf(route: Route): string {

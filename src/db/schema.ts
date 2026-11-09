@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
 import type { Category, Priority, TestStep } from "@/lib/types";
+import type { ProviderConfig } from "@/lib/aiContract";
 
 const pk = () =>
   text("id")
@@ -23,10 +24,11 @@ export const projects = sqliteTable("projects", {
 export const aiProviders = sqliteTable("ai_providers", {
   id: pk(),
   name: text("name").notNull(),
-  kind: text("kind").notNull().default("openai"), // openai (compatible) | anthropic | gemini
+  kind: text("kind").notNull().default("openai"), // openai (compatible) | anthropic | gemini | json
   baseUrl: text("base_url").notNull().default(""),
   apiKeyEnv: text("api_key_env").notNull().default(""),
   models: text("models", { mode: "json" }).$type<string[]>().notNull().default([]),
+  config: text("config", { mode: "json" }).$type<ProviderConfig>().notNull().default({}),
   enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   createdAt: createdAt(),
 });

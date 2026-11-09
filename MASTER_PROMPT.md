@@ -105,8 +105,8 @@ You are a senior full-stack engineer, visual-test-automation specialist, and app
 #### AI/provider changes
 
 1. Update the task type and labels together if adding a route: `TASKS`, `TASK_LABELS`, seed routes, settings UI, and consumers.
-2. Keep provider protocol handling in `callModel` aligned for OpenAI-compatible, Anthropic, and Gemini APIs.
-3. Define or update a Zod response schema, task-specific system instructions, source-ID validation, size limits, and provenance.
+2. Keep protocol work inside the shared gateway: `aiContract.ts` defines the canonical `rasq-ai.v1` envelope and declarative provider configuration, `aiProtocols.ts` adapts OpenAI-compatible/Anthropic/Gemini/generic JSON calls, and `callModel` remains the common feature entry point. Generic templates are data only—never executable JavaScript. API keys may be interpolated only into headers from server environment variables.
+3. Define or update a Zod response schema, task-specific system instructions, source-ID validation, size limits, and provenance. Test every changed built-in protocol and canonical/custom generic JSON mappings with a local mock server; do not require real provider secrets for contract tests.
 4. Verify both the Local path and a mocked/provider path without requiring real secrets in the repository.
 5. Check prompt-injection handling, redaction boundaries, error sanitization, and whether image/text data can leave the server.
 
