@@ -4,16 +4,20 @@ import { useCallback, useEffect, useState } from "react";
 import { KeyRound, Trash2 } from "lucide-react";
 import { api, Badge, Btn, Card, inputCls, Notice, PageHeader } from "@/components/ui";
 import { TASKS, TASK_LABELS } from "@/lib/types";
+import { AI_PROTOCOL_LABELS, DEFAULT_JSON_PROVIDER_CONFIG, type AiProtocol, type ProviderConfig } from "@/lib/aiContract";
 
-type Provider = { id: string; name: string; kind: string; baseUrl: string; apiKeyEnv: string; models: string[]; enabled: boolean; keyConfigured: boolean };
+type Provider = { id: string; name: string; kind: AiProtocol; baseUrl: string; apiKeyEnv: string; models: string[]; enabled: boolean; keyConfigured: boolean; config: ProviderConfig };
 type Policy = { id: string; name: string; priority: number; content: string; enabled: boolean };
 type S = { aiMode: string; providers: Provider[]; routes: { task: string; providerId: string | null; model: string }[]; policies: Policy[] };
+
+const defaultConfigText = () => JSON.stringify(DEFAULT_JSON_PROVIDER_CONFIG, null, 2);
 
 export default function SettingsPage() {
   const [s, setS] = useState<S | null>(null);
   const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [np, setNp] = useState({ name: "", kind: "openai", baseUrl: "", apiKeyEnv: "", models: "" });
+  const [np, setNp] = useState<{ name: string; kind: AiProtocol; baseUrl: string; apiKeyEnv: string; models: string; config: string }>({ name: "", kind: "openai", baseUrl: "", apiKeyEnv: "", models: "", config: defaultConfigText() });
   const [edit, setEdit] = useState<Record<string, string>>({});
+  const [configEdit, setConfigEdit] = useState<Record<string, string>>({});
   const load = useCallback(async () => setS(await api<S>("/api/settings")), []);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
@@ -23,7 +27,7 @@ export default function SettingsPage() {
   if (!s) return <div className="h-40 animate-pulse rounded-xl bg-slate-200" />;
   return (
     <>
-      <PageHeader title="AI Models & Policy" subtitle="Choose a multimodal model for every RASQ-Ai feature. Credentials are never stored or displayed: providers reference the NAME of a server-side environment variable." />
+      <PageHeader title="AI Models & Policy" subtitle="Route each feature through OpenAI, Anthropic, Gemini, or a declarative REST/JSON integration. Credentials are never stored: providers reference the NAME of a server-side environment variable." />
       {msg && <div className="mb-3"><Notice kind={msg.kind}>{msg.text}</Notice></div>}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="AI data-sharing switch">
@@ -70,16 +74,36 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </div>
-        <form className="mt-4 grid gap-2 border-t pt-4 md:grid-cols-6" onSubmit={(e) => { e.preventDefault(); void run(async () => { await api("/api/providers", { json: { ...np, models: np.models.split(",") } }); setNp({ name: "", kind: "openai", baseUrl: "", apiKeyEnv: "", models: "" }); }, "Provider added"); }}>
+        <form className="mt-4 grid gap-2 border-t pt-4 md:grid-cols-6" onSubmit={(e) => { e.preventDefault(); void run(async () => { await api("/api/providers", { json: { ...np, models: np.models.split(","), config: np.kind === "json" ? JSON.parse(np.config) : {} } }); setNp({ name: "", kind: "openai", baseUrl: "", apiKeyEnv: "", models: "", config: defaultConfigText() }); }, "Provider added"); }}>
           <input required className={inputCls} placeholder="Name" value={np.name} onChange={(e) => setNp({ ...np, name: e.target.value })} />
-          <select className={inputCls} value={np.kind} onChange={(e) => setNp({ ...np, kind: e.target.value })}><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></select>
-          <input className={inputCls} placeholder="Base URL" value={np.baseUrl} onChange={(e) => setNp({ ...np, baseUrl: e.target.value })} />
+          <select className={inputCls} value={np.kind} onChange={(e) => setNp({ ...np, kind: e.target.value as AiProtocol })}>{Object.entries(AI_PROTOCOL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <input required={np.kind === "json"} className={inputCls} placeholder={np.kind === "json" ? "https://host/invoke?model={{model}}" : "Base URL"} value={np.baseUrl} onChange={(e) => setNp({ ...np, baseUrl: e.target.value })} />
           <input className={inputCls} placeholder="ENV_VAR_NAME" value={np.apiKeyEnv} onChange={(e) => setNp({ ...np, apiKeyEnv: e.target.value.toUpperCase() })} />
           <input className={inputCls} placeholder="model-a, model-b" value={np.models} onChange={(e) => setNp({ ...np, models: e.target.value })} />
+          {np.kind === "json" && <textarea aria-label="New generic JSON provider configuration" className={`${inputCls} h-56 font-mono text-xs md:col-span-5`} value={np.config} onChange={(e) => setNp({ ...np, config: e.target.value })} />}
           <Btn variant="primary" type="submit"><KeyRound size={14} /> Add provider</Btn>
         </form>
+        {np.kind === "json" && <p className="mt-2 text-xs text-slate-500">The default uses the canonical rasq-ai.v1 request and output.text response. Add requestTemplate only for a different body shape. API keys are resolved from the server environment only through header templates.</p>}
         <p className="mt-2 text-xs text-slate-500">Set secrets as environment variables on the server (e.g. OPENAI_API_KEY). Only the variable name is stored; the value never reaches the browser, database or reports.</p>
       </Card>
+
+      {s.providers.some((p) => p.kind === "json") && (
+        <Card title="Generic REST / JSON protocol configurations" className="mt-4">
+          <div className="space-y-4">
+            {s.providers.filter((p) => p.kind === "json").map((p) => (
+              <div key={p.id} className="rounded-lg border p-3">
+                <div className="mb-2 text-sm"><b>{p.name}</b> <span className="ml-2 font-mono text-xs text-slate-500">{p.baseUrl}</span></div>
+                <textarea aria-label={`${p.name} JSON configuration`} className={`${inputCls} h-64 font-mono text-xs`} value={configEdit[p.id] ?? JSON.stringify(p.config, null, 2)} onChange={(e) => setConfigEdit({ ...configEdit, [p.id]: e.target.value })} />
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Btn variant="primary" onClick={() => run(async () => { await api("/api/providers", { method: "PATCH", json: { ...p, config: JSON.parse(configEdit[p.id] ?? JSON.stringify(p.config)) } }); setConfigEdit((current) => { const next = { ...current }; delete next[p.id]; return next; }); }, "JSON protocol saved")}>Save JSON protocol</Btn>
+                  <span className="text-xs text-slate-500">Placeholders: model, system, user, messages, images, responseFormat, standardRequest. Header-only secret: apiKey.</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-500">Templates are JSON data, not executable code. responsePath uses dot and numeric-index syntax, for example output.text or result.items[0].text.</p>
+        </Card>
+      )}
 
       <Card title="System policies injected into every model call" className="mt-4">
         <div className="space-y-3">

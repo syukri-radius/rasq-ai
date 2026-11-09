@@ -8,11 +8,11 @@ Point-in-time repository handoff for AI agents and maintainers. Read this with [
 |---|---|
 | Repository | `syukri-radius/rasq-ai` |
 | Product | **RASQ-Ai — trustworthy visual test automation** |
-| Source snapshot reviewed | `2dee1081107768dd191383f77c2e27acd1fed4f0` (visual scenario generation feature commit) plus this documentation update |
+| Source snapshot reviewed | `b7795374c69bfb4f6a328ba172c74fc78af87879` plus the uncommitted generic AI protocol gateway update documented here |
 | Memory generated / updated | 2026-11-08 |
-| Review method | Static source review plus typecheck, lint, production build, and isolated API/dry-run integration checks |
-| Runtime validation at update | Typecheck/build and route integration passed; lint passed with eight unused-disable warnings. Real Chromium execution was not run because the sandbox could not download the browser from `cdn.playwright.dev`. |
-| Application size at snapshot | 4,675 lines across tracked files under `src/` |
+| Review method | Static source review plus typecheck, lint, production build, fresh/upgrade migration checks, and local mock-provider HTTP integration |
+| Runtime validation at update | Typecheck/build and protocol/migration integration passed; lint passed with eight unused-disable warnings. No external AI provider or Chromium execution was used. |
+| Application size at snapshot | 4,938 lines across tracked files under `src/` |
 | License file | `Commercial Standard License`, naming PT Radius Data Solusi; see `LICENSE` for its usage/redistribution restrictions and remaining template language |
 
 This document describes the snapshot above. Later commits may invalidate details. Statements in **Known constraints** are observations, not automatically approved feature work.
@@ -95,7 +95,9 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 | `src/app/demo-target/page.tsx` | Synthetic checkout exposing every supported control type |
 | `src/app/api/**/route.ts` | JSON, upload, file, export, capture, and run endpoints |
 | `src/lib/perception.ts` | Canvas image analysis, candidate classification, dHash, frame grouping |
-| `src/lib/ai.ts` | Mission, policies, provider routing, redaction, provider HTTP calls, provenance |
+| `src/lib/ai.ts` | Mission, policies, task-route resolution, redaction, common model entry point, provenance |
+| `src/lib/aiContract.ts` | Protocol catalog, provider-config Zod schema, canonical `rasq-ai.v1` request types |
+| `src/lib/aiProtocols.ts` | OpenAI/Anthropic/Gemini adapters and generic JSON templates, headers, endpoints, response paths |
 | `src/lib/srs.ts` | Requirement parsing/classification and deterministic local test design |
 | `src/lib/cases.ts` | Test-case loading with requirement keys |
 | `src/lib/n8n.ts` | Workflow generation/validation and n8n ↔ ReactFlow conversion |
@@ -202,7 +204,7 @@ data/runs/<runId>/<position>.jpg
 | `/tests` | Generate from SRS or selected saved scans, filter cases, view matrix, export CSV/JSON, convert displayed cases to n8n |
 | `/workflows` | Open a converted workflow by `?workflow=<id>`, generate/import/edit/export, dry-run or execute, inspect evidence |
 | `/reports` | Generate and download evidence-based Markdown reports |
-| `/settings` | AI data-sharing switch, per-task models, provider catalog, policies |
+| `/settings` | AI data-sharing switch, per-task models, built-in/generic provider catalog and JSON protocol editor, policies |
 | `/demo-target` | Safe synthetic checkout target; no real payment processing |
 
 The selected project ID is stored in browser `localStorage` under `rasq.project`. The provider prefers the first web project when there is no valid saved selection.
@@ -216,7 +218,7 @@ The `ok` helper returns the supplied JSON payload directly, not wrapped in a `da
 | `/api/health` | `GET`: database `select 1`, app/engine health |
 | `/api/projects` | `GET`: all projects; `POST`: create with validated surface fallback |
 | `/api/settings` | `GET`: AI mode, providers plus key-configured flags, routes, policies; `PUT`: update mode/route/policy |
-| `/api/providers` | `POST`/`PATCH`: validate provider catalog data; `DELETE?id=`: remove and reset routes using it |
+| `/api/providers` | `POST`/`PATCH`: validate protocol, endpoint, key-env name, models, and declarative JSON config; `DELETE?id=`: remove and reset routes using it |
 | `/api/capture` | `POST`: Playwright screenshot returned as PNG data URL |
 | `/api/ai/scan` | `POST`: enrich supplied candidates/image using `visual_scan`; Local selection returns HTTP 409 |
 | `/api/recordings` | `GET[?projectId=]`; multipart `POST`: save recording and SHA-256 metadata |
@@ -246,7 +248,7 @@ The client `api<T>()` helper sends JSON when given `json`, defaults such request
 | Table | Key fields and relationships |
 |---|---|
 | `projects` | Root project; `surface`, `targetUrl`, description |
-| `ai_providers` | Protocol, base URL, key-env name, JSON model list, enabled flag; no credential value |
+| `ai_providers` | Protocol, base URL, key-env name, JSON model list, declarative protocol `config`, enabled flag; no credential value |
 | `model_routes` | Task primary key; nullable provider means Local |
 | `settings` | Key/value settings, including `aiMode` |
 | `policies` | Named, prioritized, enableable system-policy text |
@@ -272,7 +274,7 @@ For schema changes, update `src/db/schema.ts` and generate a new migration:
 npx drizzle-kit generate
 ```
 
-`drizzle.config.json` uses SQLite dialect, `src/db/schema.ts`, `drizzle/`, and `file:./data/rasq.db`.
+`drizzle.config.json` uses SQLite dialect, `src/db/schema.ts`, `drizzle/`, and `file:./data/rasq.db`. Migration `0001_ai_provider_protocol_config.sql` adds the non-null JSON `ai_providers.config` column with `{}` as the legacy/default value; both fresh and pre-0001 upgrade paths were exercised through Drizzle's migrator.
 
 ---
 
@@ -320,13 +322,16 @@ LOCAL_RULES_MODEL  = rasq-local-rules-v1
 
 `untrusted(label, body)` wraps data with explicit untrusted-data markers. `redact` performs regex-based redaction for many PAN-like numbers, non-example emails, common secret assignments, and several token formats; it preserves the public `4242424242424242` sandbox fixture. This is a mitigation, not comprehensive sensitive-data detection, and it does not redact pixels.
 
-`callModel` supports:
+`callModel` delegates every feature call to `callProtocolProvider`. The gateway first builds a canonical `rasq-ai.v1` request containing model, system instructions, user messages, optional base64/MIME images, and JSON response format, then adapts it to:
 
 - OpenAI-compatible `POST /chat/completions`, JSON response format, optional bearer key, data-URL images.
 - Anthropic `POST /v1/messages`, base64 image blocks, 8192 max tokens.
 - Gemini `:generateContent`, JSON MIME response configuration, inline base64 images.
+- Generic REST/JSON with a full endpoint, optional `{{model}}`, POST/PUT/PATCH, custom headers, typed declarative request templates, response paths, and timeouts.
 
-Calls use `AbortSignal.timeout(180_000)`. `parseJson` tolerates Markdown fences and extracts the outermost object before `JSON.parse`; route handlers then apply Zod schemas and domain-specific source-ID checks. Provider errors include only a truncated response snippet and attempt to replace the configured key.
+Generic templates support model/system/user/messages/images/responseFormat/standardRequest placeholders. They are JSON data only and reject unknown placeholders or API-key use outside headers. `ProviderConfigSchema` limits config size, headers, nesting, methods, and timeout. Common authentication headers must reference `{{apiKey}}`, which resolves only from the named server environment variable.
+
+Calls default to `AbortSignal.timeout(180_000)` and can be configured from 1,000 to 300,000 ms. Generic response text is extracted through dot/index paths such as `output.text` or `result.items[0].text`; built-ins retain their established extraction paths. `parseJson` then tolerates Markdown fences and extracts the outermost object before route-specific Zod/domain validation. Provider errors are truncated and scrub the configured key. The full contract is in `AI_API_JSON_INTEGRATION.md`.
 
 ### Task-specific behavior
 
@@ -554,6 +559,7 @@ These are current-source facts to preserve or address intentionally, not claims 
 13. **Starter metadata remains:** package name and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
 14. **No checked-in environment template/deployment manifest:** setup relies on source defaults and README; production topology is not defined here.
 15. **License text needs deliberate handling:** `LICENSE` is not a permissive open-source license. It names PT Radius Data Solusi, states machine/usage/redistribution restrictions, and retains template/source-code language that should be reviewed rather than silently ignored or rewritten.
+16. **AI gateway is synchronous:** the generic contract does not yet provide streaming, retries/failover, OAuth exchange, SigV4, mTLS, usage/cost metering, or provider health routing. Endpoint egress controls remain a deployment responsibility. See `ENTERPRISE_ROADMAP.md` for the recommended sequence.
 
 ---
 
