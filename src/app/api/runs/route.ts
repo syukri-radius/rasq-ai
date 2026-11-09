@@ -3,11 +3,13 @@ import { getDb } from "@/db";
 import { runs, workflows } from "@/db/schema";
 import { body, fail, ok } from "@/lib/api";
 import { startRun } from "@/lib/runner";
+import { failStaleDesktopRuns } from "@/lib/desktopService";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const db = await getDb();
+  await failStaleDesktopRuns(db);
   const wid = new URL(req.url).searchParams.get("workflowId");
   return ok(wid ? await db.select().from(runs).where(eq(runs.workflowId, wid)).orderBy(desc(runs.startedAt)).limit(20) : await db.select().from(runs).orderBy(desc(runs.startedAt)).limit(50));
 }

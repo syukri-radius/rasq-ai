@@ -5,12 +5,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { addEdge, Background, Controls, Handle, MiniMap, Position, ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, type Connection, type Node, type NodeProps } from "@xyflow/react";
 import { Download, FileJson, FlaskConical, Play, Plus, Save, Sparkles, Trash2, Upload } from "lucide-react";
 import ModelPicker from "@/components/ModelPicker";
+import DesktopRunPanel, { type DesktopRunView } from "@/components/DesktopRunPanel";
 import { api, Badge, Btn, Card, download, inputCls, Notice, PageHeader, useProject } from "@/components/ui";
 import { fromFlow, NT, toFlow, type N8nWorkflow } from "@/lib/n8n";
 
 type WfRow = { id: string; name: string; version: number; nodes: number; provenance: string };
 type Step = { id: string; position: number; nodeId: string; nodeName: string; nodeType: string; status: string; message: string; durationMs: number; evidence: Record<string, unknown> };
-type Run = { id: string; mode: string; status: string; error: string | null; summary: Record<string, number>; startedAt: string; finishedAt: string | null; targetUrl: string };
+type Run = { id: string; mode: string; status: string; error: string | null; summary: Record<string, number>; startedAt: string; finishedAt: string | null; targetUrl: string } & DesktopRunView;
 
 const RING: Record<string, string> = { idle: "border-slate-300", pending: "border-slate-300", running: "border-sky-500 ring-4 ring-sky-200 animate-pulse", passed: "border-emerald-500 bg-emerald-50", failed: "border-rose-500 bg-rose-50", error: "border-rose-600 bg-rose-50", warning: "border-amber-500 bg-amber-50", "needs-review": "border-violet-500 bg-violet-50", skipped: "border-slate-400 bg-slate-100" };
 const KIND: Record<string, string> = { [NT.trigger]: "Trigger", [NT.open]: "Open target", [NT.section]: "Test case", [NT.action]: "Action", [NT.assert]: "Assert" };
@@ -169,13 +170,13 @@ function Editor() {
     } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : "Import failed" }); }
   };
 
-  const running = run?.status === "running";
+  const running = run?.status === "running" || run?.status === "pending";
   const selStep = steps.find((s) => s.nodeId === selId);
   const flowProps = useMemo(() => ({ nodeTypes, fitView: true, minZoom: 0.1, deleteKeyCode: ["Backspace", "Delete"] as string[] }), []);
 
   return (
     <>
-      <PageHeader title="Workflows & Live Run Monitor" subtitle="Test workflows are n8n-compatible JSON edited on a ReactFlow canvas (react-workflow-editor architecture) and executed in-app by Playwright. Node colours show real step results as they happen.">
+      <PageHeader title="Workflows & Live Run Monitor" subtitle="Test workflows are n8n-compatible JSON edited on a ReactFlow canvas, executed in-app by Playwright, or compiled by the Web Control Plane for attended RobotJS desktop agents. Node colours show real step results.">
         <ModelPicker task="workflow_creation" />
       </PageHeader>
       {msg && <div className="mb-3"><Notice kind={msg.kind}>{msg.text}</Notice></div>}
@@ -212,6 +213,8 @@ function Editor() {
             {run?.error && <div className="mt-2 whitespace-pre-wrap"><Notice kind="error">{run.error}</Notice></div>}
             <p className="mt-2 text-xs text-slate-500">Actions use visual anchors (scaled region + template-hash check). Steps without an anchor are skipped, never guessed. Assertions without an automatable oracle become “needs-review”. Dry runs execute nothing.</p>
           </Card>
+
+          <DesktopRunPanel workflowId={wfId} run={run} onRunCreated={watch} onRefresh={() => { if (run) watch(run.id); }} />
 
           <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
             <div className="h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

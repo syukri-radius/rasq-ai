@@ -8,8 +8,8 @@ Zero-DOM optical automation: client perception supplies geometry, an optional mu
 1. **Record & Scan** – full-screen recorder (start / pause / stop / cancel), screenshot/video upload, or server-side URL capture. Perception pipeline: luminance → Sobel → density grid → connected components → merged candidate regions → geometric labels + dHash template hash. Frames are grouped per page/window. Saved recording/screen scans can be reopened, edited, and updated in place while preserving unchanged control IDs.
 2. **SRS Documents** – PDF/MD/TXT; exact requirement IDs, acceptance criteria and ambiguity flags.
 3. **Test Scenarios** – traceable (many-to-many) positive/negative/boundary/security/accessibility/performance/resilience cases from an SRS, or positive P2 visual-interaction cases from selected saved scans. Uses P0–P3 priorities and synthetic data; visual-only cases never invent requirement links. CSV/JSON export.
-4. **Workflows & Runs** – convert filtered Test Scenarios directly into downloadable n8n-compatible JSON and a saved runnable workflow, or build on the ReactFlow canvas. Playwright executes visual-anchor actions with live per-node status and step screenshots. Dry-run mode validates without executing.
-5. **Reports** – built only from recorded data.
+4. **Workflows & Runs** – convert filtered Test Scenarios directly into downloadable n8n-compatible JSON and a saved runnable workflow, or build on the ReactFlow canvas. Playwright executes visual-anchor actions with live per-node status and step screenshots. The Web Control Plane can also compile a `rasq-desktop.v1` bundle and inspectable RobotJS script for an enrolled attended desktop agent. Dry-run mode validates without executing.
+5. **Reports** – built only from recorded data, with Playwright, real attended RobotJS, dry-run, and mock-simulation outcomes distinguished.
 
 ## AI models
 Every feature (visual scan, document analysis, test scenarios, workflow creation, reports) has its own model selector (Local engine or any configured provider/model). The server-side protocol gateway supports OpenAI-compatible, Anthropic, Gemini, and generic REST/JSON APIs. Generic providers can map methods, headers, request JSON, multimodal content, and response paths through the canonical `rasq-ai.v1` envelope; see [AI API JSON Integration](./AI_API_JSON_INTEGRATION.md).
@@ -24,9 +24,17 @@ Install the browser once: `npx playwright install chromium` (Linux: add `--with-
 
 `rasq-ai.*` nodes in exported workflows are executed by RASQ-Ai; stock n8n shows them as unknown nodes.
 
+## Attended Desktop Agent
+
+The isolated `desktop-agent/` Electron package executes web-compiled desktop manifests through a fixed RobotJS runner after no-input preflight and explicit operator confirmation. It includes revocable enrollment, strict visual anchors, browser/local emergency stop, live step evidence, and a safe mock driver. The real-input MVP targets Windows x64; real desktop execution and packaged-agent validation have not been performed in this environment. Browser-facing routes remain single-operator development APIs.
+
+See [Desktop Agent](./DESKTOP_AGENT.md) for enrollment, supported actions/assertions, script export, packaging, safety controls, and platform limitations.
+
 ## Agent and design documentation
 
 - [Master Prompt](./MASTER_PROMPT.md) — reusable instructions for AI coding, QA, security, and architecture tasks, including RASQ-Ai's non-negotiable evidence, privacy, visual-locator, and traceability rules.
 - [Context Memory](./CONTEXT_MEMORY.md) — a point-in-time architecture and behavior handoff covering routes, persistence, AI routing, perception, workflows, runs, reports, known constraints, and validation commands. Verify it against the current source and update it when architecture changes.
 - [AI API JSON Integration](./AI_API_JSON_INTEGRATION.md) — canonical request/response contract, generic protocol templates, routing behavior, and security limits.
 - [Enterprise Roadmap](./ENTERPRISE_ROADMAP.md) — prioritized recommendations for identity, durable execution, test governance, visual intelligence, AI routing, scale, and integrations.
+- [Desktop Agent](./DESKTOP_AGENT.md) — attended RobotJS architecture, enrollment, compiler contract, execution, evidence, packaging, and validation boundaries.
+- [Desktop Agent Master Prompt](./DESKTOP_AGENT_MASTER_PROMPT.md) — implementation requirements and acceptance criteria used for the attended desktop feature.

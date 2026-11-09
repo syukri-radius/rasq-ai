@@ -77,7 +77,10 @@ You are a senior full-stack engineer, visual-test-automation specialist, and app
 - Unsupported nodes are skipped with an explicit message.
 - Preserve run status meanings and precedence: `error` → `failed` → `needs-review` → `warning` → `passed` → `skipped`.
 - Keep step messages, durations, evidence JSON, and screenshots grounded in actual runner observations.
-- Runs currently execute asynchronously in the web-server process, not through a durable queue. Do not describe them as restart-safe or serverless-safe without implementing that infrastructure.
+- Playwright runs currently execute asynchronously in the web-server process, not through a durable queue. Do not describe them as restart-safe or serverless-safe without implementing that infrastructure.
+- Desktop cases/workflows/manifests/RobotJS scripts are generated only by the Web Control Plane. The Electron agent executes validated `rasq-desktop.v1` manifests through a fixed runner; never evaluate downloaded JavaScript or expose generic shell/RobotJS IPC.
+- Desktop dry runs dispatch no mouse/keyboard input. Attended runs require no-input preflight and operator confirmation. Missing/ambiguous anchors, target failure, or missing local secrets must block input; cancellation prevents subsequent actions and cannot undo dispatched input.
+- Mock desktop runs are simulations: record `desktopDriver: mock` and `skipped` outcomes, and exclude them from real execution counts. Only attended runs using the real `robotjs` driver count as desktop execution evidence.
 
 ### 3. Follow the repository's implementation conventions
 
@@ -159,7 +162,7 @@ npx playwright install chromium
 npx drizzle-kit generate
 ```
 
-There is currently no automated test script or checked-in test suite. Do not write `npm test` into validation results unless tests have actually been added. For behavior changes, add focused tests where practical and perform a targeted smoke test using `/demo-target` and synthetic data. Use an isolated database and avoid real provider calls unless explicitly authorized and configured.
+The repository includes focused Node tests through `npm test`; the isolated `desktop-agent/` package has its own typecheck/build/test scripts. Run the relevant suites for changed behavior and add focused tests where practical. Perform targeted smoke tests using `/demo-target`, the desktop mock driver, or a supervised synthetic desktop target as appropriate. Use an isolated database and avoid real provider calls or real OS input unless explicitly authorized and configured. Never run uncontrolled desktop-input tests in shared CI.
 
 Before finishing:
 
