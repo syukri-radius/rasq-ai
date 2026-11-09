@@ -8,11 +8,10 @@ Point-in-time repository handoff for AI agents and maintainers. Read this with [
 |---|---|
 | Repository | `syukri-radius/rasq-ai` |
 | Product | **RASQ-Ai — trustworthy visual test automation** |
-| Source snapshot reviewed | `b7795374c69bfb4f6a328ba172c74fc78af87879` plus the uncommitted generic AI protocol gateway update documented here |
-| Memory generated / updated | 2026-11-08 |
-| Review method | Static source review plus typecheck, lint, production build, fresh/upgrade migration checks, and local mock-provider HTTP integration |
-| Runtime validation at update | Typecheck/build and protocol/migration integration passed; lint passed with eight unused-disable warnings. No external AI provider or Chromium execution was used. |
-| Application size at snapshot | 4,938 lines across tracked files under `src/` |
+| Source snapshot reviewed | `8fb19db2143c7ec2ce86cd84d5cd9aaf7a3640a8` plus the uncommitted attended RobotJS Desktop Agent implementation documented here |
+| Memory generated / updated | 2026-11-09 |
+| Review method | Static source review plus typecheck, lint, production build, compiler/agent unit tests, fresh/upgrade migrations, and real HTTP integration with a headless mock desktop agent |
+| Runtime validation at update | Web/agent typechecks and agent build passed; web production build and mock HTTP dry-run/attended/cancellation paths passed; lint retains eight existing unused-disable warnings. No real OS input, packaged agent, external AI provider, or Chromium execution was used. |
 | License file | `Commercial Standard License`, naming PT Radius Data Solusi; see `LICENSE` for its usage/redistribution restrictions and remaining template language |
 
 This document describes the snapshot above. Later commits may invalidate details. Statements in **Known constraints** are observations, not automatically approved feature work.
@@ -44,6 +43,8 @@ either case source
   → filtered cases convertible in Test Scenarios to saved/downloadable n8n JSON
   → n8n-shaped workflow JSON + ReactFlow editor
   → dry-run validation or in-process Playwright execution
+  → OR Web `rasq-desktop.v1` compiler → deterministic RobotJS bundle/script
+       → enrolled desktop agent → preflight/confirmation → fixed attended runner
   → run steps + evidence JSON + screenshots
   → Markdown reports based only on persisted facts
 ```
@@ -53,7 +54,9 @@ The central division of responsibility is deliberate:
 - **Perception** proposes geometry and low-confidence geometric classifications in the browser.
 - **Optional AI** enriches semantics or generates artifacts only through the operator-selected route.
 - **Playwright** performs URL capture and real web execution and records evidence.
-- **Reports** distinguish generated artifacts, dry runs, and actual Playwright runs.
+- **Web desktop compiler** deterministically generates versioned manifests, anchor assets, integrity metadata, and inspectable RobotJS source from approved workflows; the agent does not design tests or evaluate downloaded source.
+- **Desktop agent** performs outbound polling, no-input preflight, attended confirmation, strict visual matching, fixed-runner input, cancellation, and evidence return. Real input is a Windows x64 MVP; mock runs are simulations.
+- **Reports** distinguish generated artifacts, dry runs, mock simulations, actual Playwright runs, and real attended RobotJS runs.
 
 The project is currently a compact single-operator application, not a demonstrated multi-tenant or distributed production system.
 
@@ -69,7 +72,9 @@ The project is currently a compact single-operator application, not a demonstrat
 - Drizzle ORM `0.45.2` with `@libsql/client`; SQLite by default, with an alternate libsql URL configurable through `RASQ_DB_URL`. The README cites Turso URLs, but the reviewed code does not wire a separate auth-token option.
 - Playwright `^1.65.0` for capture and execution.
 - `@xyflow/react` `^12.12.1` for the workflow canvas.
-- Zod `^4.6.7` for AI-output and workflow-step contracts.
+- Zod `^4.6.7` for AI-output, workflow-step, and `rasq-desktop.v1` contracts.
+- `sharp` `0.34.5` for deterministic cropped desktop anchor PNGs and `fflate` `0.8.2` for verified desktop ZIP bundles.
+- Isolated `desktop-agent/` Electron `43.3.0` / RobotJS `0.9.1` package with TypeScript, esbuild, and a mock driver.
 - `unpdf` for server-side PDF text extraction.
 - `lucide-react` for icons.
 - `pg`, `@types/pg`, and `dotenv` are dependencies, but the reviewed runtime path uses libsql/SQLite rather than PostgreSQL.
@@ -85,6 +90,8 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 | `src/components/Shell.tsx` | Navigation and project selector |
 | `src/components/ui.tsx` | Client API helper, project context, UI primitives |
 | `src/components/ModelPicker.tsx` | Per-task model route selector |
+| `src/components/DesktopRunPanel.tsx` | Desktop compiler preview/export, agent selection, confirmation, cancellation, live preview |
+| `desktop-agent/` | Isolated secure Electron shell, fixed manifest runner, Windows/mock drivers, headless mock controller, packaging/target |
 | `src/app/(app)/page.tsx` | Server-rendered dashboard and aggregate counts |
 | `src/app/(app)/scan/page.tsx` | Recorder, uploads, capture UI, perception review, AI enrichment, saving |
 | `src/app/(app)/requirements/page.tsx` | SRS upload/paste and requirement display |
@@ -101,13 +108,19 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 | `src/lib/srs.ts` | Requirement parsing/classification and deterministic local test design |
 | `src/lib/cases.ts` | Test-case loading with requirement keys |
 | `src/lib/n8n.ts` | Workflow generation/validation and n8n ↔ ReactFlow conversion |
-| `src/lib/runner.ts` | URL guard, screenshot capture, visual actions/assertions, run persistence |
+| `src/lib/runner.ts` | URL guard, screenshot capture, Playwright visual actions/assertions, run persistence |
+| `src/lib/desktopContract.ts` | Shared strict desktop manifest, agent, event, evidence, and limit contracts |
+| `src/lib/desktopCompiler.ts` | Sequential graph/source validation, deterministic desktop manifest and anchor crops |
+| `src/lib/desktopScript.ts` | Fixed portable RobotJS source template generated from the same manifest |
+| `src/lib/desktopBundle.ts` | Deterministic ZIP output and safe integrity-verified extraction |
+| `src/lib/desktopAuth.ts` | Enrollment bootstrap and revocable device-token authentication |
+| `src/lib/desktopService.ts` | Stored compilation, stale-run handling, monotonic desktop event persistence |
 | `src/lib/schemas.ts` | Zod schemas for AI responses, SRS cases, and constrained visual-only cases |
 | `src/lib/screens.ts` | Shared saved-control normalization for screen creation and update-in-place editing |
 | `src/lib/visualCases.ts` | Deterministic positive P2 interaction cases from saved visual controls |
 | `src/lib/types.ts` | Shared control/task/action/category/priority/status constants |
 | `src/lib/api.ts` | `ok`, `fail`, `body`, async route `Params` helpers |
-| `src/db/schema.ts` | Sixteen Drizzle tables and relationships |
+| `src/db/schema.ts` | Eighteen Drizzle tables and relationships, including desktop agents/events and desktop run metadata |
 | `src/db/index.ts` | Global libsql client, migration and seed initialization |
 | `src/db/seed.ts` | Demo projects, provider catalog, local routes, policies, sample SRS |
 | `drizzle/` | Generated SQL migration and metadata; do not treat as hand-written domain source |
@@ -151,8 +164,13 @@ npx playwright install chromium --with-deps
 | `npm run start` | `next start` |
 | `npm run lint` | `eslint .` |
 | `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | `tsx --test tests/*.test.ts` |
+| `cd desktop-agent && npm run typecheck` | Agent TypeScript checks |
+| `cd desktop-agent && npm test` | Mock-driver safety tests |
+| `cd desktop-agent && npm run build` | esbuild main/preload/headless bundles with Electron/RobotJS external |
+| `cd desktop-agent && npm run package:win` | Windows-only unsigned development ZIP staging; not a signed installer |
 
-There is no `test` script, checked-in automated test suite, or CI configuration in the source snapshot.
+Focused web and agent tests are checked in; no CI configuration was added.
 
 ### Environment and storage
 
@@ -164,6 +182,10 @@ There is no `test` script, checked-in automated test suite, or CI configuration 
 | `ANTHROPIC_API_KEY` | Optional secret referenced by the seeded Anthropic provider |
 | `GEMINI_API_KEY` | Optional secret referenced by the seeded Gemini provider |
 | `OPENROUTER_API_KEY` | Optional secret referenced by the seeded OpenRouter provider |
+| `RASQ_DESKTOP_ENROLLMENT_TOKEN` | Required on the control plane to enable one-time desktop enrollment |
+| `RASQ_CONTROL_URL` | Agent/headless-mock control-plane base URL; plain HTTP only for loopback development |
+| `RASQ_DEVICE_TOKEN` | Optional previously enrolled agent credential; otherwise the agent can enroll |
+| `RASQ_DESKTOP_DRIVER` | `mock` for safe tests; omitted selects the real RobotJS driver |
 
 No API key is needed for the default Local engine. The seeded Ollama provider has an empty key-env name and defaults to `http://127.0.0.1:11434/v1`; selecting it still uses the provider/model-call path.
 
@@ -176,6 +198,8 @@ data/rasq.db                 default database
 data/recordings/<uuid>.webm|mp4
 data/screens/<uuid>.png|jpg|webp
 data/runs/<runId>/<position>.jpg
+data/runs/<runId>/desktop-<sequence>-<before|after|preview>.png
+data/desktop/bundles/<runId>.zip
 ```
 
 `getDb()` enables foreign keys, applies `drizzle/` migrations, and seeds once per process. The database client and readiness Promise are cached on `globalThis`. Initialization resets its cached Promise after failure so a later request can retry.
@@ -233,7 +257,17 @@ The `ok` helper returns the supplied JSON payload directly, not wrapped in a `da
 | `/api/workflows/:id/export` | `GET`: saved n8n JSON download |
 | `/api/runs` | `GET[?workflowId=]`; `POST`: start Playwright/dry run, HTTP 202 with run ID |
 | `/api/runs/:id` | `GET`: run and ordered steps |
-| `/api/runs/:id/shots/:file` | `GET`: constrained run-screenshot path, numeric JPEG filenames only |
+| `/api/runs/:id/shots/:file` | `GET`: constrained numeric Playwright JPEG or desktop before/after/preview PNG path |
+| `/api/desktop/agents` | `GET`: sanitized agents/online state; `DELETE?id=`: revoke and terminate assigned active runs |
+| `/api/desktop/agents/enroll` | `POST`: bootstrap-token enrollment; returns a device token once and stores only its hash |
+| `/api/desktop/agents/poll` | Device-authenticated `POST`: heartbeat/capabilities and outbound run assignment/confirmation/cancellation state |
+| `/api/desktop/workflows/:id` | `POST`: compiler manifest/diagnostics; `GET` with target query: deterministic RobotJS ZIP export |
+| `/api/desktop/runs` | `POST`: compile and reserve an agent/display/target for attended or dry-run execution |
+| `/api/desktop/runs/:id/bundle` | Assigned-agent `GET`: integrity-checked run ZIP |
+| `/api/desktop/runs/:id/confirm` | `POST`: authorize input after no-input preflight |
+| `/api/desktop/runs/:id/cancel` | `POST`: request browser cancellation; queued runs finish immediately |
+| `/api/desktop/runs/:id/events` | Assigned-agent `POST`: bounded, contiguous, idempotent session/step/complete events |
+| `/api/desktop/runs/:id/evidence` | Assigned-agent `POST`: size/hash-checked PNG preview and before/after evidence |
 | `/api/reports` | `GET[?projectId=]`; `POST`: generate/persist report; `DELETE?id=` |
 | `/api/reports/:id` | `GET`: Markdown attachment |
 
@@ -243,7 +277,7 @@ The client `api<T>()` helper sends JSON when given `json`, defaults such request
 
 ## 5. Persistence model
 
-`src/db/schema.ts` defines sixteen tables:
+`src/db/schema.ts` defines eighteen tables:
 
 | Table | Key fields and relationships |
 |---|---|
@@ -252,6 +286,7 @@ The client `api<T>()` helper sends JSON when given `json`, defaults such request
 | `model_routes` | Task primary key; nullable provider means Local |
 | `settings` | Key/value settings, including `aiMode` |
 | `policies` | Named, prioritized, enableable system-policy text |
+| `desktop_agents` | Revocable device identity/token hash, OS/arch/version/protocol, capabilities/displays/permissions, availability/current run/heartbeat |
 | `recordings` | Project FK cascade; file metadata and SHA-256 |
 | `screens` | Project FK cascade; recording FK `set null`; source dimensions, image path, grouping/provenance |
 | `controls` | Screen FK cascade; type, label, integer region, confidence, evidence, dHash, separate perception/AI provenance |
@@ -260,8 +295,9 @@ The client `api<T>()` helper sends JSON when given `json`, defaults such request
 | `test_cases` | Project FK cascade; case key, category/priority, JSON preconditions/data/steps/assumptions, provenance |
 | `test_traceability` | Composite PK on test case + requirement; both FKs cascade |
 | `workflows` | Project FK cascade; n8n JSON, provenance, version, timestamps |
-| `runs` | Workflow FK cascade; mode/status/target/error/summary/timestamps |
+| `runs` | Workflow FK cascade; executor/mode/status/target/error/summary/timestamps plus desktop agent/driver/session/bundle/target/preview/confirmation/cancellation/event sequence |
 | `run_steps` | Run FK cascade; ordered node snapshot, status/message/duration/evidence JSON |
+| `desktop_events` | Run FK cascade; agent ID, unique run+sequence, session/step/complete payload, timestamp; no frame streams |
 | `reports` | Project FK cascade; generated Markdown and provenance |
 
 IDs default to `crypto.randomUUID()`; creation timestamps default in application code. SQLite JSON columns carry TypeScript types through Drizzle.
@@ -274,7 +310,7 @@ For schema changes, update `src/db/schema.ts` and generate a new migration:
 npx drizzle-kit generate
 ```
 
-`drizzle.config.json` uses SQLite dialect, `src/db/schema.ts`, `drizzle/`, and `file:./data/rasq.db`. Migration `0001_ai_provider_protocol_config.sql` adds the non-null JSON `ai_providers.config` column with `{}` as the legacy/default value; both fresh and pre-0001 upgrade paths were exercised through Drizzle's migrator.
+`drizzle.config.json` uses SQLite dialect, `src/db/schema.ts`, `drizzle/`, and `file:./data/rasq.db`. Migration `0001_ai_provider_protocol_config.sql` adds the non-null JSON `ai_providers.config` column with `{}` as the legacy/default value. Migration `0002_desktop_agent.sql` adds desktop agents/events and desktop run metadata while defaulting existing runs to Playwright. Fresh and pre-0002 upgrade paths are exercised through Drizzle's migrator in `tests/desktopMigration.test.ts`.
 
 ---
 
@@ -522,6 +558,22 @@ error > failed > needs-review > warning > passed > skipped
 
 A fatal runner error marks still-pending steps skipped and stores the run error. Unsupported node types produce skipped steps rather than being executed.
 
+### Attended desktop compiler and agent
+
+The Web Control Plane is the only owner of recordings, visual analysis, test cases, workflows, desktop manifests, and RobotJS source. `compileDesktopWorkflow` accepts exactly one connected sequential trigger path and authoritatively resolves every action control against the selected project's saved screens. Branches/joins/cycles/disconnected nodes, unknown controls, invalid bounds/timeouts, native upload/download actions, web-only `textVisible`/`urlContains` assertions, and unsupported nodes produce structured blocking diagnostics.
+
+Supported desktop actions are `navigate`, bounded `wait`, `click`, `type`, `select`, `check`, `uncheck`, `toggle`, and `slider`. Supported assertions are `screenshotChanged` and `manualReview`. Desktop actions always use strict anchors. `type` resolves synthetic data or an uppercase local environment-variable reference before clicking; fixture placeholders without an explicit secret reference fail compilation.
+
+`createDesktopBundle` deterministically emits `rasq-desktop.json`, `robotjs.cjs`, a package pinning RobotJS `0.9.1`, cropped PNG anchors, SHA-256 file metadata, and generated instructions. `verifyDesktopBundle` enforces file/path/count/byte limits, contract parsing, file hashes, and required anchors. The fixed agent runner consumes the manifest; the generated script is a portable export, not downloaded code evaluated by the agent. The portable script defaults to dry-run and explicitly lacks OS window verification/focus.
+
+Desktop agents enroll with `RASQ_DESKTOP_ENROLLMENT_TOKEN`, receive a random device token stored by the server only as SHA-256, and poll outbound every 750 ms. No inbound agent server or browser-to-localhost call is used. The Electron renderer is sandboxed with Node integration disabled and narrow preload IPC. Local Stop and Ctrl/Command+Alt+Shift+F12 request emergency stop.
+
+Desktop session states are `queued → assigned → preflight → awaiting-operator-confirmation → running → completing → terminal`, with cancellation/disconnect/error paths. Attended input starts only after web confirmation. RobotJS capture is display-aware and image search must return exactly one match. The real driver is limited to Windows x64 and uses a fixed PowerShell/Win32 exact-foreground-window adapter. The mock driver follows the same transport/preflight/confirmation paths without OS input.
+
+Run events are schema validated, contiguous, unique per run/sequence, and immutable after terminal completion. Invalid payloads do not advance sequence numbers. PNG evidence has hash/size checks; identical replay is idempotent and altered replay fails. Heartbeat expiry/revocation produces an error and skipped unexecuted steps. Desktop screenshots use flat constrained filenames under existing run artifact storage.
+
+Every desktop run records `desktopDriver`. Mock-attended actions become `skipped` with simulation messages, and reports exclude mock runs from real execution. Real attended reporting requires `desktopDriver: robotjs`; real Windows execution and packaged-agent behavior remain unverified in the current environment.
+
 ---
 
 ## 10. Reporting semantics
@@ -531,10 +583,10 @@ A fatal runner error marks still-pending steps skipped and stores the run error.
 - Requirement total, covered/uncovered exact IDs, and ambiguity.
 - Case count by category and priority.
 - Screen/control counts, controls by type, and controls below 0.5 confidence.
-- Workflow count, Playwright-run count, dry-run count, and latest run status summaries.
+- Workflow count, Playwright-run count, real attended RobotJS-run count, mock-simulation count, dry-run count, and latest executor/driver/status summaries.
 - A requirement-to-test-case traceability table.
 
-If there are no Playwright runs, the report explicitly says no test execution has been recorded and that artifact counts are not observed results. Dry runs do not satisfy the executed-run count.
+If there are no Playwright or real RobotJS attended runs, the report explicitly says no real test execution has been recorded and that artifact/simulation counts are not observed application results. Dry runs and `desktopDriver: mock` runs do not satisfy the executed-run count. Execution tables include executor and driver.
 
 Optional AI receives only these computed statistics. Its executive summary, risks, and recommendations are labelled AI-authored with provenance. Reports are saved as Markdown and can be downloaded unchanged. The report does not infer a pass rate absent recorded data.
 
@@ -544,7 +596,7 @@ Optional AI receives only these computed statistics. Its executive summary, risk
 
 These are current-source facts to preserve or address intentionally, not claims that the application is production-hardened:
 
-1. **No automated verification suite:** no test script, test files, or CI configuration were present at the snapshot. Typecheck/lint/build are the available standard checks.
+1. **Focused tests, not full platform coverage:** compiler/migration/event tests and mock-driver safety tests are checked in, but there is no CI configuration, full browser suite, real RobotJS execution result, or packaged-agent smoke result.
 2. **No auth layer:** reviewed API and page routes do not implement authentication, authorization, session handling, or tenant isolation. Project IDs are client supplied.
 3. **Single-process execution:** detached in-process runs are not durable, scheduled, horizontally coordinated, or restart-safe.
 4. **Local operational state:** SQLite/libsql plus synchronous local filesystem operations bind much of the state to one application instance/filesystem.
@@ -560,6 +612,10 @@ These are current-source facts to preserve or address intentionally, not claims 
 14. **No checked-in environment template/deployment manifest:** setup relies on source defaults and README; production topology is not defined here.
 15. **License text needs deliberate handling:** `LICENSE` is not a permissive open-source license. It names PT Radius Data Solusi, states machine/usage/redistribution restrictions, and retains template/source-code language that should be reviewed rather than silently ignored or rewritten.
 16. **AI gateway is synchronous:** the generic contract does not yet provide streaming, retries/failover, OAuth exchange, SigV4, mTLS, usage/cost metering, or provider health routing. Endpoint egress controls remain a deployment responsibility. See `ENTERPRISE_ROADMAP.md` for the recommended sequence.
+17. **Desktop browser routes remain single-operator:** device transport is authenticated/revocable, but general browser enrollment/run/evidence routes inherit the application's missing user authZ and must not be exposed as enterprise multi-tenant APIs.
+18. **Real desktop scope is narrow and unverified here:** the real driver enables only Windows x64 with PNG-enabled RobotJS. No real Windows, macOS, Linux, Citrix, VMware, mobile, or packaged-agent acceptance run has been performed. Linux native installation also hit blocked Node-header download access; `--ignore-scripts` is for mock development only.
+19. **Desktop oracles/platform adapters remain limited:** there is no desktop OCR, native file-dialog, global input recorder, autonomous healing, continuous video, lock-state detection, process-signature validation, or managed VM pool. The portable script cannot focus/verify windows.
+20. **Desktop polling is not a durable general worker fabric:** outbound assignment persists runs and handles stale agents, but it does not provide a general durable Playwright queue, autoscaling, session scheduling, or guaranteed recovery of an interrupted interactive desktop action.
 
 ---
 
@@ -581,7 +637,8 @@ When dependencies and Chromium are available, this path exercises the main local
 12. Run Playwright only against the synthetic demo target. Inspect anchor scores, step statuses, messages, and screenshots.
 13. Generate a report and verify it separates generated coverage from observed run evidence; visual-only cases must not increase SRS coverage.
 14. Toggle the AI kill switch and verify provider-backed operations cannot make a model call.
-15. Delete isolated test data/artifacts afterward; do not commit the database or evidence files.
+15. For desktop transport, enroll `desktop-agent` with `RASQ_DESKTOP_DRIVER=mock`, compile a bound sequential workflow, run dry-run and attended confirmation/cancellation, and verify mock outcomes remain `skipped`/simulation rather than real execution. Perform real input only in a separate supervised Windows x64 acceptance environment.
+16. Delete isolated test data/artifacts afterward; do not commit the database or evidence files.
 
 This is a manual checklist, not evidence that the path has already passed.
 

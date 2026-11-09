@@ -1,0 +1,26 @@
+{
+  "name": "rasq-ai-desktop-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RASQ-Ai attended desktop execution agent",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "start": "electron .",
+    "start:mock": "node dist/headless.cjs",
+    "start:target": "electron synthetic-target.cjs",
+    "package:win": "npm run build && powershell -NoProfile -File scripts/package-win.ps1"
+  },
+  "dependencies": {
+    "robotjs": "0.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "electron": "43.3.0",
+    "esbuild": "0.27.0",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"><title>RASQ Synthetic Desktop Target</title>
+<style>body{font:16px system-ui;background:#f8fafc;color:#0f172a;padding:40px}main{max-width:600px;margin:auto;background:white;border:1px solid #cbd5e1;border-radius:16px;padding:30px}button,input,select{font:inherit;padding:12px;margin:8px 0}button{background:#4f46e5;color:white;border:0;border-radius:8px;min-width:160px}input,select{display:block;width:100%;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px}#result{margin-top:20px;padding:16px;border-radius:8px;background:#f1f5f9}label{display:block;margin-top:14px}</style></head>
+<body><main><h1>RASQ Synthetic Desktop Target</h1><p>Use only for supervised attended-agent validation. No network or production data is used.</p>
+<label>Synthetic display name<input id="name" value="QA User 001"></label>
+<label>Synthetic role<select id="role"><option>Tester</option><option>Reviewer</option></select></label>
+<label><input id="check" type="checkbox" style="display:inline;width:auto"> Confirm synthetic data</label>
+<button id="run">Run synthetic action</button>
+<div id="result">No action observed.</div>
+</main><script src="synthetic-target.js"></script></body></html>

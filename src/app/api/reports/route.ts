@@ -48,9 +48,12 @@ export async function POST(req: Request) {
       controlsByType: tally(ctl.map((c) => c.type)),
       lowConfidenceControls: ctl.filter((c) => c.confidence < 0.5).length,
       workflows: wfs.length,
-      executedRuns: rs.filter((r) => r.mode === "playwright").length,
+      playwrightRuns: rs.filter((r) => r.executor === "playwright" && r.mode === "playwright").length,
+      desktopAttendedRuns: rs.filter((r) => r.executor === "robotjs-desktop" && r.mode === "attended" && r.desktopDriver === "robotjs").length,
+      executedRuns: rs.filter((r) => (r.executor === "playwright" && r.mode === "playwright") || (r.executor === "robotjs-desktop" && r.mode === "attended" && r.desktopDriver === "robotjs")).length,
+      simulatedDesktopRuns: rs.filter((r) => r.executor === "robotjs-desktop" && r.desktopDriver === "mock").length,
       dryRuns: rs.filter((r) => r.mode === "dry-run").length,
-      latestRunStatuses: rs.slice(0, 5).map((r) => ({ mode: r.mode, status: r.status, summary: r.summary })),
+      latestRunStatuses: rs.slice(0, 5).map((r) => ({ executor: r.executor, driver: r.desktopDriver || null, mode: r.mode, status: r.status, summary: r.summary })),
     };
 
     const route = await resolveRoute(db, "report_generation");
@@ -66,8 +69,9 @@ export async function POST(req: Request) {
       "",
       "## Evidence statement",
       stats.executedRuns === 0
-        ? "**No Playwright execution has been recorded for this project.** All counts below describe generated artifacts, not observed test results."
-        : `${stats.executedRuns} Playwright run(s) are recorded in RASQ-Ai. Only recorded run data is reported; nothing is inferred.`,
+        ? "**No Playwright or real RobotJS desktop execution has been recorded for this project.** All counts below describe generated artifacts or simulations, not observed application test results."
+        : `${stats.executedRuns} real execution run(s) are recorded: ${stats.playwrightRuns} Playwright and ${stats.desktopAttendedRuns} attended RobotJS desktop. Only recorded run data is reported; nothing is inferred.`,
+      ...(stats.simulatedDesktopRuns ? [`${stats.simulatedDesktopRuns} mock desktop run(s) are simulations and are not counted as real execution evidence.`] : []),
       ...(ai ? ["", `## Executive summary (AI-authored by ${prov} from the statistics in this report)`, ai.executiveSummary] : []),
       "",
       "## Traceability",
@@ -98,7 +102,7 @@ export async function POST(req: Request) {
       table(stats.controlsByType),
       "",
       "## Execution",
-      rs.length ? "| Run | Mode | Status | Summary |\n|---|---|---|---|\n" + rs.slice(0, 10).map((r) => `| ${r.startedAt.toISOString()} | ${r.mode} | ${r.status} | ${Object.entries(r.summary).map(([k, v]) => `${k}:${v}`).join(" ")} |`).join("\n") : "No runs recorded.",
+      rs.length ? "| Run | Executor | Driver | Mode | Status | Summary |\n|---|---|---|---|---|---|\n" + rs.slice(0, 10).map((r) => `| ${r.startedAt.toISOString()} | ${r.executor} | ${r.desktopDriver || "—"} | ${r.mode} | ${r.status} | ${Object.entries(r.summary).map(([k, v]) => `${k}:${v}`).join(" ")} |`).join("\n") : "No runs recorded.",
       ...(ai ? ["", "## Risks (AI-authored)", ...ai.risks.map((x) => `- ${x}`), "", "## Recommendations (AI-authored)", ...ai.recommendations.map((x) => `- ${x}`)] : []),
       "",
       "---",

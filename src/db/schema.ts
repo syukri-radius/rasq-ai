@@ -1,6 +1,7 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
 import type { Category, Priority, TestStep } from "@/lib/types";
 import type { ProviderConfig } from "@/lib/aiContract";
+import type { DesktopCapabilities, DesktopDisplay, DesktopPermissions, DesktopTarget } from "@/lib/desktopContract";
 
 const pk = () =>
   text("id")
@@ -42,6 +43,24 @@ export const modelRoutes = sqliteTable("model_routes", {
 export const settings = sqliteTable("settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),
+});
+
+export const desktopAgents = sqliteTable("desktop_agents", {
+  id: pk(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  os: text("os").notNull(),
+  arch: text("arch").notNull(),
+  agentVersion: text("agent_version").notNull(),
+  protocolVersion: text("protocol_version").notNull(),
+  capabilities: text("capabilities", { mode: "json" }).$type<DesktopCapabilities>().notNull(),
+  displays: text("displays", { mode: "json" }).$type<DesktopDisplay[]>().notNull().default([]),
+  permissions: text("permissions", { mode: "json" }).$type<DesktopPermissions>().notNull(),
+  availability: text("availability").notNull().default("idle"),
+  currentRunId: text("current_run_id"),
+  lastHeartbeatAt: integer("last_heartbeat_at", { mode: "timestamp_ms" }).notNull(),
+  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  createdAt: createdAt(),
 });
 
 export const policies = sqliteTable("policies", {
@@ -191,6 +210,16 @@ export const runs = sqliteTable("runs", {
   targetUrl: text("target_url").notNull().default(""),
   error: text("error"),
   summary: text("summary", { mode: "json" }).$type<Record<string, number>>().notNull().default({}),
+  executor: text("executor").notNull().default("playwright"), // playwright | robotjs-desktop
+  desktopAgentId: text("desktop_agent_id"),
+  desktopDriver: text("desktop_driver").notNull().default(""), // robotjs | mock; mock is simulation, never real execution evidence
+  desktopSessionState: text("desktop_session_state").notNull().default(""),
+  desktopBundleSha256: text("desktop_bundle_sha256").notNull().default(""),
+  desktopTarget: text("desktop_target", { mode: "json" }).$type<DesktopTarget | Record<string, never>>().notNull().default({}),
+  desktopPreview: text("desktop_preview", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
+  desktopConfirmedAt: integer("desktop_confirmed_at", { mode: "timestamp_ms" }),
+  desktopCancelRequested: integer("desktop_cancel_requested", { mode: "boolean" }).notNull().default(false),
+  desktopLastEventSeq: integer("desktop_last_event_seq").notNull().default(0),
   startedAt: integer("started_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date()),
@@ -211,6 +240,22 @@ export const runSteps = sqliteTable("run_steps", {
   durationMs: integer("duration_ms").notNull().default(0),
   evidence: text("evidence", { mode: "json" }).$type<Record<string, unknown>>().notNull().default({}),
 });
+
+export const desktopEvents = sqliteTable(
+  "desktop_events",
+  {
+    id: pk(),
+    runId: text("run_id")
+      .notNull()
+      .references(() => runs.id, { onDelete: "cascade" }),
+    agentId: text("agent_id").notNull(),
+    seq: integer("seq").notNull(),
+    type: text("type").notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [unique("desktop_events_run_seq_unique").on(t.runId, t.seq)],
+);
 
 export const reports = sqliteTable("reports", {
   id: pk(),
