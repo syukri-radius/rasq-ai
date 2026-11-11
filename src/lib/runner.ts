@@ -7,7 +7,7 @@ import { getDb } from "@/db";
 import { runs, runSteps, workflows } from "@/db/schema";
 import { executionOrder, NT, type N8nNode, type N8nWorkflow } from "./n8n";
 import { hashSimilarity } from "./perception";
-import type { RunStatus } from "./types";
+import { isReviewOnlyControlType, type RunStatus } from "./types";
 
 export const DATA_DIR = path.resolve(process.cwd(), "data");
 export const baseUrl = () => `http://127.0.0.1:${process.env.PORT ?? 3000}`;
@@ -125,6 +125,7 @@ async function action(ctx: Ctx, p: Record<string, unknown>): Promise<Outcome> {
     await page.waitForTimeout(Math.min(10_000, num(data, 500)));
     return { status: "passed", message: `Waited ${num(data, 500)} ms` };
   }
+  if (isReviewOnlyControlType(String(p.controlType ?? ""))) return { status: "needs-review", message: `Control type ${String(p.controlType)} is review-only; no mouse/keyboard input was dispatched. Define a manual oracle or explicit interaction pattern.` };
   const r = p.region as { x: number; y: number; w: number; h: number } | null;
   if (!r) return { status: "skipped", message: "No visual anchor is bound to this step, so it was NOT executed. Scan the screen and bind a control." };
   if (data.startsWith("<FIXTURE")) return { status: "needs-review", message: "Step data is a credential placeholder; RASQ-Ai does not type secrets. Supply from your vault." };
@@ -153,6 +154,27 @@ async function action(ctx: Ctx, p: Record<string, unknown>): Promise<Outcome> {
   let msg = "";
   let status: RunStatus = "passed";
   switch (act) {
+    case "hold": {
+      const durationMs = Math.min(10_000, Math.max(100, num(data, 1000)));
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      try {
+        await page.waitForTimeout(durationMs);
+      } finally {
+        await page.mouse.up();
+      }
+      evidence.holdMs = durationMs;
+      msg = `Pressed and held the visual anchor for ${durationMs} ms, then released the left button.`;
+      break;
+    }
+    case "hover": {
+      const durationMs = Math.min(10_000, Math.max(100, num(data, 1000)));
+      await page.mouse.move(cx, cy);
+      await page.waitForTimeout(durationMs);
+      evidence.hoverMs = durationMs;
+      msg = `Hovered the visual anchor for ${durationMs} ms without clicking.`;
+      break;
+    }
     case "type": {
       await page.mouse.click(cx, cy);
       await page.keyboard.press("ControlOrMeta+A");

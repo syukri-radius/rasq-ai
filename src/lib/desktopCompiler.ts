@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { NT, type N8nNode, type N8nWorkflow } from "./n8n";
+import { isReviewOnlyControlType } from "./types";
 import {
   canonicalJson,
   DESKTOP_COMPILER_VERSION,
@@ -23,6 +24,7 @@ export type DesktopScreenSource = {
 };
 export type DesktopControlSource = {
   id: string;
+  type: string;
   screenId: string;
   x: number;
   y: number;
@@ -88,7 +90,7 @@ function linearOrder(workflow: N8nWorkflow, diagnostics: DesktopDiagnostic[]): N
   return ordered;
 }
 
-const supportedActions = new Set<DesktopAction>(["navigate", "wait", "click", "type", "select", "check", "uncheck", "toggle", "slider"]);
+const supportedActions = new Set<DesktopAction>(["navigate", "wait", "click", "hold", "hover", "type", "select", "check", "uncheck", "toggle", "slider"]);
 
 export async function compileDesktopWorkflow(input: DesktopCompileInput): Promise<DesktopCompilation> {
   const diagnostics: DesktopDiagnostic[] = [];
@@ -123,7 +125,7 @@ export async function compileDesktopWorkflow(input: DesktopCompileInput): Promis
     if (node.type === NT.action) {
       const action = text(node.parameters.action, 40) as DesktopAction;
       if (!supportedActions.has(action)) {
-        addError(node, "DESKTOP_ACTION_UNSUPPORTED", `Action "${action}" is not implemented by the desktop compiler.`, "Use click/type/select/check/uncheck/toggle/slider/wait/navigate, or add a separately tested native adapter.");
+        addError(node, "DESKTOP_ACTION_UNSUPPORTED", `Action "${action}" is not implemented by the desktop compiler.`, "Use click/hold/hover/type/select/check/uncheck/toggle/slider/wait/navigate, or add a separately tested native adapter.");
         continue;
       }
       let anchor: DesktopAnchor | null = null;
@@ -132,6 +134,10 @@ export async function compileDesktopWorkflow(input: DesktopCompileInput): Promis
         const control = controlId ? controls.get(controlId) : undefined;
         if (!control || controlId !== control.id) {
           addError(node, "DESKTOP_ANCHOR_UNRESOLVED", `Action "${node.name}" has no authoritative saved control.`, "Bind a control from this project's saved visual scans before compiling.");
+          continue;
+        }
+        if (isReviewOnlyControlType(control.type)) {
+          addError(node, "DESKTOP_CONTROL_REVIEW_ONLY", `Control "${controlId}" is a ${control.type} review-only subject; action "${action}" is forbidden.`, "Use a manualReview assertion or define a separately tested oracle/pattern. No input may be dispatched to this subject by an inferred interaction.");
           continue;
         }
         const screen = screens.get(control.screenId);
@@ -185,10 +191,12 @@ export async function compileDesktopWorkflow(input: DesktopCompileInput): Promis
         continue;
       }
       if (secretRef) data = null;
-      if (action === "wait") {
-        const ms = Number(data ?? 500);
-        if (!Number.isFinite(ms) || ms < 0 || ms > 10_000) {
-          addError(node, "DESKTOP_WAIT_INVALID", `Wait "${node.name}" must be between 0 and 10000 ms.`, "Use a bounded numeric wait.");
+      if (action === "wait" || action === "hold" || action === "hover") {
+        const timedInteraction = action === "hold" || action === "hover";
+        const ms = Number(data ?? (timedInteraction ? 1000 : 500));
+        const minimum = timedInteraction ? 100 : 0;
+        if (!Number.isFinite(ms) || ms < minimum || ms > 10_000) {
+          addError(node, timedInteraction ? "DESKTOP_ACTION_DURATION_INVALID" : "DESKTOP_WAIT_INVALID", `${action} "${node.name}" must be between ${minimum} and 10000 ms.`, "Use a bounded numeric duration in milliseconds.");
           continue;
         }
         data = String(ms);

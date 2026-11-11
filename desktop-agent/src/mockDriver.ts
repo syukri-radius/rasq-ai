@@ -14,7 +14,7 @@ export class MockDesktopDriver implements DesktopDriver {
   readonly calls: string[] = [];
   readonly display: DesktopDisplay = { id: "mock-main", x: 0, y: 0, width: 1280, height: 800, isMain: true, scaleX: 1, scaleY: 1 };
 
-  capabilities() { return { driver: "mock" as const, supportsInput: true, actions: ["click", "type", "select", "check", "uncheck", "toggle", "slider", "wait", "navigate"], platformNotes: ["Simulated driver for automated tests; no OS input is dispatched."] }; }
+  capabilities() { return { driver: "mock" as const, supportsInput: true, actions: ["click", "hold", "hover", "type", "select", "check", "uncheck", "toggle", "slider", "wait", "navigate"], platformNotes: ["Simulated driver for automated tests; no OS input is dispatched."] }; }
   async displays() { return [this.display]; }
   async permissions() { return { screenCapture: "granted" as const, accessibility: "not-required" as const, interactiveSession: "confirmed" as const }; }
   async validateTarget(target: DesktopTarget, allowFocus: boolean): Promise<TargetValidation> {
@@ -32,6 +32,8 @@ export class MockDesktopDriver implements DesktopDriver {
     return Array.from({ length: this.matchCount }, (_, i) => ({ x: 10 + i * 100, y: 20, width: anchor.region.w, height: anchor.region.h, screenX: 15 + i * 100, screenY: 30 }));
   }
   async click(_frame: DesktopFrame, _match: DesktopMatch, fraction = 0.5) { this.inputCalls++; this.calls.push(`click:${fraction}`); }
+  async holdStart(_frame: DesktopFrame, _match: DesktopMatch) { this.inputCalls++; this.calls.push("hold-start"); }
+  async hover(_frame: DesktopFrame, _match: DesktopMatch) { this.inputCalls++; this.calls.push("hover"); }
   async type(value: string) { this.inputCalls++; this.calls.push(`type:${value.length}`); }
   async select(value: string) { this.inputCalls++; this.calls.push(`select:${value}`); }
   async releaseAll() { this.released = true; this.calls.push("release-all"); }

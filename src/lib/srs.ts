@@ -1,5 +1,5 @@
 import type { Category, Priority, TestStep } from "./types";
-import { LOCAL_RULES_MODEL } from "./types";
+import { isReviewOnlyControlType, LOCAL_RULES_MODEL } from "./types";
 
 export type ParsedReq = {
   reqKey: string;
@@ -113,6 +113,14 @@ function stepFor(c: BindableControl, data: Record<string, string>, order: number
   switch (c.type) {
     case "input":
       return { ...base, action: "type", data: /card/i.test(c.label) && data.cardNumber ? data.cardNumber : data.email ?? data.fullName ?? data.quantity ?? "RASQ-sample-001" };
+    case "s_input":
+      return { ...base, action: "type", data: "RASQ sample search" };
+    case "p_input":
+      return { ...base, action: "type", data: "<FIXTURE: synthetic password supplied by the test vault>" };
+    case "p_button":
+      return { ...base, action: "hold", data: "1000" };
+    case "h_button":
+      return { ...base, action: "hover", data: "1000" };
     case "date_picker":
       return { ...base, action: "type", data: data.date ?? "2030-01-15" };
     case "dropdown":
@@ -144,16 +152,19 @@ function priorityOf(text: string, category: Category): Priority {
 export function designLocalCases(req: ParsedReq, controls: BindableControl[]): LocalCase[] {
   const full = `${req.text} ${req.acceptance.join(" ")}`;
   const { data, notes } = synth(full);
-  const bound = bind(full, controls);
+  const matched = bind(full, controls);
+  const bound = matched.filter((c) => !isReviewOnlyControlType(c.type));
+  const reviewOnly = matched.filter((c) => isReviewOnlyControlType(c.type));
   const assumptions = [...notes];
   if (req.ambiguity) assumptions.push(`Ambiguity: ${req.ambiguity}`);
-  if (bound.length === 0) assumptions.push("No saved visual anchor matches this requirement; steps are unbound and need a scanned control before automated execution.");
+  if (reviewOnly.length) assumptions.push(`Review-only visual subject(s) ${reviewOnly.map((c) => c.label || c.id).join(", ")} were not clicked; wording/font/location/realtime/gesture expectations require a defined manual oracle.`);
+  if (matched.length === 0) assumptions.push("No saved visual anchor matches this requirement; steps are unbound and need a scanned control before automated execution.");
 
   const mkSteps = (extra?: (s: TestStep[]) => void, expected?: string): TestStep[] => {
     const steps: TestStep[] = [{ order: 1, action: "navigate", target: "Application under test (clean session)", controlId: null, data: null, expected: null }];
     bound.forEach((c) => steps.push(stepFor(c, data, steps.length + 1)));
     extra?.(steps);
-    steps.push({ order: steps.length + 1, action: "assert", target: "Observable outcome", controlId: null, data: null, expected: expected ?? req.acceptance[0] ?? req.text });
+    steps.push({ order: steps.length + 1, action: "assert", target: "Observable outcome", controlId: reviewOnly[0]?.id ?? null, data: null, expected: expected ?? req.acceptance[0] ?? req.text });
     return steps;
   };
   const pre = ["Clean test environment with synthetic data only", ...(req.ambiguity ? ["Assumption recorded: " + req.ambiguity] : [])];

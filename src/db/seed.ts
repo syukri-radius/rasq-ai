@@ -25,7 +25,7 @@ export async function seed(db: Db) {
   const [demo] = await db
     .insert(projects)
     .values([
-      { name: "RASQ Demo Storefront", surface: "web", targetUrl: "/demo-target", description: "Built-in demo page with every supported control type, safe to automate with Playwright." },
+      { name: "RASQ Demo Storefront", surface: "web", targetUrl: "/demo-target", description: "Built-in demo page with standard interactive control types, safe to automate with Playwright." },
       { name: "Citrix Claims Desktop", surface: "citrix", targetUrl: "", description: "Pixel-only surface: no DOM available, visual anchors required." },
     ])
     .returning();
@@ -62,7 +62,7 @@ export async function seed(db: Db) {
       name: "RASQ-Ai Testing Control taxonomy and action policy",
       priority: 95,
       content:
-        "Supported control types: input, button, dropdown, date picker, checkbox, toggle, slider, upload, download. Inputs use synthetic valid and invalid data. Buttons assert observable transitions. Selects choose a specified option. Checkboxes and switches assert state. Sliders check bounds. Uploads validate type/size/checksum. Downloads verify SHA-256 when a manifest is supplied.",
+        "Supported control types: input, button, dropdown, date picker, checkbox, toggle, slider, upload, download, text, w_button, w_text, s_input, p_input, p_button, h_button, timer, gesture_arena. Inputs use synthetic valid and invalid data; search inputs include their grouped icon/button and password inputs use vault placeholders. Buttons assert observable transitions; push/hover buttons require bounded hold/hover actions. Text, window titles, timers and gesture arenas are review-only without an explicit oracle/pattern. Selects choose a specified option. Checkboxes and switches assert state. Sliders check bounds. Uploads validate type/size/checksum. Downloads verify SHA-256 when a manifest is supplied.",
     },
     {
       name: "RASQ-Ai Visual perception rules",

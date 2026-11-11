@@ -92,16 +92,19 @@ export function buildWorkflow(opts: {
         let value = b?.assertValue ?? "";
         if (!kind) {
           const q = /"([^"]{2,80})"/.exec(s.expected ?? "");
-          if (q) {
+          const requiresVisualReview = /\b(font|wording|location|geometry|gesture|signature|realtime|real-time|timer)\b/i.test(s.expected ?? "");
+          if (requiresVisualReview) {
+            kind = "manualReview";
+          } else if (q) {
             kind = "textVisible";
             value = q[1];
-          } else if (lastAction === "click") kind = "screenshotChanged";
+          } else if (lastAction === "click" || lastAction === "hold" || lastAction === "hover") kind = "screenshotChanged";
           else kind = "manualReview";
         }
         // Performance oracle: measure time until a visual transition appears after the click.
         if (toMs(s.expected ?? "") !== null && lastAction === "click" && kind === "manualReview") kind = "screenshotChanged";
         push(
-          { name: `${tc.caseKey}.${s.order} assert`, type: NT.assert, position: [0, 0], parameters: { ...base, kind, value, expected: s.expected ?? "", maxDurationMs: /within\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds|seconds|s)\b/i.exec(s.expected ?? "") ? toMs(s.expected ?? "") : null } },
+          { name: `${tc.caseKey}.${s.order} assert`, type: NT.assert, position: [0, 0], parameters: { ...base, kind, value, expected: s.expected ?? "", controlId: ctl?.id ?? null, controlType: ctl?.type ?? null, region: ctl ? { x: ctl.x, y: ctl.y, w: ctl.w, h: ctl.h } : null, sourceWidth: ctl?.screenW ?? null, sourceHeight: ctl?.screenH ?? null, locatorHash: ctl?.locatorHash ?? "", maxDurationMs: /within\s+(\d+(?:\.\d+)?)\s*(ms|milliseconds|seconds|s)\b/i.exec(s.expected ?? "") ? toMs(s.expected ?? "") : null } },
           r,
           col++,
         );
@@ -119,6 +122,7 @@ export function buildWorkflow(opts: {
             target: s.target,
             data: s.data ?? "",
             controlId: ctl?.id ?? null,
+            controlType: ctl?.type ?? null,
             anchorStatus: ctl ? "bound" : s.action === "navigate" || s.action === "wait" ? "n/a" : "unresolved",
             region: ctl ? { x: ctl.x, y: ctl.y, w: ctl.w, h: ctl.h } : null,
             sourceWidth: ctl?.screenW ?? null,

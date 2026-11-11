@@ -89,7 +89,7 @@ export const DesktopMarkerStepSchema = StepBase.extend({
   kind: z.enum(["trigger", "target", "section"]),
 }).strict();
 
-export const DesktopActionSchema = z.enum(["navigate", "wait", "click", "type", "select", "check", "uncheck", "toggle", "slider"]);
+export const DesktopActionSchema = z.enum(["navigate", "wait", "click", "hold", "hover", "type", "select", "check", "uncheck", "toggle", "slider"]);
 export type DesktopAction = z.infer<typeof DesktopActionSchema>;
 export const DesktopActionStepSchema = StepBase.extend({
   kind: z.literal("action"),

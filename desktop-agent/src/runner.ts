@@ -144,8 +144,26 @@ export class DesktopRunner {
         if (matches.length !== 1) throw new StepFailure(step, `Strict anchor "${step.anchor.controlId}" returned ${matches.length} matches; no input dispatched.`);
         previousBefore = before.sha256;
         actionStarted = Date.now();
-        if (step.action === "slider") await this.driver.click(before, matches[0], Math.max(0, Math.min(1, Number(step.data ?? 50) / 100)));
-        else await this.driver.click(before, matches[0]);
+        const timedEvidence: Record<string, unknown> = {};
+        if (step.action === "hold") {
+          const durationMs = Number(step.data ?? 1000);
+          await this.driver.holdStart(before, matches[0]);
+          try {
+            await sleep(durationMs);
+          } finally {
+            await this.driver.releaseAll();
+          }
+          timedEvidence.holdMs = durationMs;
+        } else if (step.action === "hover") {
+          const durationMs = Number(step.data ?? 1000);
+          await this.driver.hover(before, matches[0]);
+          await sleep(durationMs);
+          timedEvidence.hoverMs = durationMs;
+        } else if (step.action === "slider") {
+          await this.driver.click(before, matches[0], Math.max(0, Math.min(1, Number(step.data ?? 50) / 100)));
+        } else {
+          await this.driver.click(before, matches[0]);
+        }
         if (step.action === "type") await this.driver.type(secret ?? step.data ?? "");
         if (step.action === "select") await this.driver.select(step.data ?? "");
         const after = await this.driver.capture(display.id);
@@ -158,6 +176,7 @@ export class DesktopRunner {
           match: matches[0],
           regionChanged: before.sha256 !== after.sha256,
           ...(step.action === "type" ? { typedCharacters: (secret ?? step.data ?? "").length } : {}),
+          ...timedEvidence,
         });
       }
       current = null;

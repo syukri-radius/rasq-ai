@@ -63,6 +63,8 @@ The initial compiler accepts one connected sequential path beginning at exactly 
 | `navigate` | Validate/focus the approved target at a case boundary. It is not a URL reload. |
 | `wait` | Bounded 0–10000 ms wait with cancellation checks. |
 | `click` | Capture, require exactly one image match, move/click through the driver, and capture evidence. |
+| `hold` | Press the left mouse button at one strict match for a bounded 100–10000 ms duration, then release on completion, failure, or cancellation. |
+| `hover` | Move to one strict match without clicking and remain there for a bounded 100–10000 ms duration. |
 | `type` | Resolve synthetic data or a local environment-variable reference before clicking; select all and type. Typed content is not logged. |
 | `select` | Focus the anchor and use the documented keyboard selection behavior. Exact semantics still require an appropriate oracle. |
 | `check` / `uncheck` / `toggle` | Click after strict matching. Pixel change does not prove exact semantic state. |
@@ -72,6 +74,8 @@ The initial compiler accepts one connected sequential path beginning at exactly 
 | `textVisible` / `urlContains` | Blocking compiler diagnostic; Playwright DOM/URL oracles are not reused for native desktop execution. |
 | `upload` / `download` | Blocking compiler diagnostic until native-dialog adapters are separately implemented and tested. |
 | Branching / unsupported nodes | Blocking diagnostic; never silently flattened or marked passed. |
+
+Saved `text`, `w_text`, `timer`, and `gesture_arena` controls are review-only. The desktop compiler rejects manually injected input actions targeting them; use `manualReview` until a specific oracle or gesture pattern is implemented.
 
 All desktop action anchors are strict regardless of the Playwright workflow's non-strict default. RobotJS `findImages` must return exactly one match. Zero or ambiguous matches block input. Source control IDs, screen IDs, source dimensions, regions, dHash values, requirement IDs, and provenance are retained in the manifest.
 

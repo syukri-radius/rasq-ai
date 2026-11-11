@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-/** Safe, synthetic automation target exposing every RASQ-Ai control type. */
+/** Safe, synthetic automation target exposing the standard interactive RASQ-Ai control types. */
 export default function DemoTarget() {
   const [card, setCard] = useState("");
   const [qty, setQty] = useState("1");
