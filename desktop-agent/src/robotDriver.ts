@@ -44,7 +44,7 @@ export class RobotDesktopDriver implements DesktopDriver {
     return {
       driver: "robotjs" as const,
       supportsInput: supported && this.robot.image.supportsPNG,
-      actions: supported ? ["click", "type", "select", "check", "uncheck", "toggle", "slider", "wait", "navigate"] : [],
+      actions: supported ? ["click", "hold", "hover", "type", "select", "check", "uncheck", "toggle", "slider", "wait", "navigate"] : [],
       platformNotes: [
         supported ? "Windows x64 real-input MVP; exact foreground-window matching uses a fixed PowerShell/Win32 adapter." : "Real input is enabled only for the validated Windows x64 MVP on this build.",
         "An unlocked, isolated, supervised interactive desktop is required. Linux support is X11-only and is not validated by this MVP.",
@@ -95,6 +95,21 @@ export class RobotDesktopDriver implements DesktopDriver {
     const point = image.toScreenPoint({ x: match.x + Math.floor(match.width * Math.max(0, Math.min(1, fraction))), y: match.y + Math.floor(match.height / 2) });
     this.robot.moveMouseSmooth(point.x, point.y);
     this.robot.mouseClick("left");
+  }
+
+  async holdStart(frame: DesktopFrame, match: DesktopMatch): Promise<void> {
+    const image = frame.raw as RobotImage | undefined;
+    if (!image) throw new Error("RobotJS capture is no longer available.");
+    const point = image.toScreenPoint({ x: match.x + Math.floor(match.width / 2), y: match.y + Math.floor(match.height / 2) });
+    this.robot.moveMouseSmooth(point.x, point.y);
+    this.robot.mouseToggle("down", "left");
+  }
+
+  async hover(frame: DesktopFrame, match: DesktopMatch): Promise<void> {
+    const image = frame.raw as RobotImage | undefined;
+    if (!image) throw new Error("RobotJS capture is no longer available.");
+    const point = image.toScreenPoint({ x: match.x + Math.floor(match.width / 2), y: match.y + Math.floor(match.height / 2) });
+    this.robot.moveMouseSmooth(point.x, point.y);
   }
 
   async type(value: string): Promise<void> {

@@ -8,8 +8,21 @@ export const CONTROL_TYPES = [
   "slider",
   "upload",
   "download",
+  "text",
+  "w_button",
+  "w_text",
+  "s_input",
+  "p_input",
+  "p_button",
+  "h_button",
+  "timer",
+  "gesture_arena",
 ] as const;
 export type ControlType = (typeof CONTROL_TYPES)[number];
+
+/** Visual subjects that require an explicit oracle/pattern before any input or automated assertion. */
+export const REVIEW_ONLY_CONTROL_TYPES = ["text", "w_text", "timer", "gesture_arena"] as const satisfies readonly ControlType[];
+export const isReviewOnlyControlType = (type: string): boolean => (REVIEW_ONLY_CONTROL_TYPES as readonly string[]).includes(type);
 
 export const SURFACES = ["web", "desktop", "citrix", "vmware", "mobile", "design"] as const;
 export type Surface = (typeof SURFACES)[number];
@@ -34,6 +47,8 @@ export const TASK_LABELS: Record<Task, string> = {
 export const STEP_ACTIONS = [
   "navigate",
   "click",
+  "hold",
+  "hover",
   "type",
   "select",
   "check",

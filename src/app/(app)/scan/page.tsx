@@ -18,7 +18,7 @@ type SavedScreen = { id: string; recordingId: string | null; name: string; group
 type SavedRec = { id: string; name: string; durationMs: number; sizeBytes: number; sha256: string; createdAt: string };
 type EditMeta = { screenId: string; groupKey: string };
 
-const COLORS: Record<string, string> = { input: "#2563eb", button: "#7c3aed", dropdown: "#0891b2", date_picker: "#0d9488", checkbox: "#d97706", toggle: "#ea580c", slider: "#db2777", upload: "#65a30d", download: "#16a34a", unknown: "#94a3b8" };
+const COLORS: Record<string, string> = { input: "#2563eb", button: "#7c3aed", dropdown: "#0891b2", date_picker: "#0d9488", checkbox: "#d97706", toggle: "#ea580c", slider: "#db2777", upload: "#65a30d", download: "#16a34a", text: "#475569", w_button: "#334155", w_text: "#64748b", s_input: "#0284c7", p_input: "#be123c", p_button: "#c026d3", h_button: "#9333ea", timer: "#b45309", gesture_arena: "#15803d", unknown: "#94a3b8" };
 
 const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Cannot decode image")); i.src = src; });
 const readFile = (f: File) => new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(new Error("Cannot read file")); r.readAsDataURL(f); });
@@ -290,7 +290,7 @@ export default function ScanPage() {
       const next: Item[] = list.map((i) => {
         const a = byId.get(i.id);
         if (!a) return i;
-        if (!a.type) return { ...i, include: false, evidence: `AI: not an interactive control. ${a.evidence}`, aiModel: res.model };
+        if (!a.type) return { ...i, include: false, evidence: `AI: not a supported visual test object. ${a.evidence}`, aiModel: res.model };
         return { ...i, type: a.type, label: a.label, confidence: a.confidence, evidence: a.evidence || i.evidence, include: true, source: "ai", aiModel: res.model };
       });
       let n = 0;

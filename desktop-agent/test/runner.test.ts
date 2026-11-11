@@ -94,6 +94,29 @@ test("missing local secret blocks typing before click", async () => {
   assert.equal(driver.released, true);
 });
 
+test("hold and hover remain distinct bounded inputs with evidence and cleanup", async () => {
+  const driver = new MockDesktopDriver();
+  const h = hooks(driver);
+  const clickStep = manifest.steps[2];
+  if (clickStep.kind !== "action") throw new Error("Action fixture required");
+  const timed: DesktopManifest = {
+    ...manifest,
+    steps: [
+      ...manifest.steps.slice(0, 2),
+      { ...clickStep, nodeId: "hold", action: "hold", data: "100" },
+      { ...clickStep, nodeId: "hover", position: 3, action: "hover", data: "100" },
+    ],
+  };
+  const status = await new DesktopRunner(driver, h.hooks).run(timed, "attended", "/tmp");
+  assert.equal(status, "skipped");
+  assert.ok(driver.calls.includes("hold-start"));
+  assert.ok(driver.calls.includes("hover"));
+  assert.equal(driver.calls.some((call) => call.startsWith("click:")), false);
+  assert.equal(driver.released, true);
+  assert.equal(h.steps.find((step) => step.nodeId === "hold")?.evidence.holdMs, 100);
+  assert.equal(h.steps.find((step) => step.nodeId === "hover")?.evidence.hoverMs, 100);
+});
+
 test("emergency stop prevents subsequent actions and releases held inputs", async () => {
   const driver = new MockDesktopDriver();
   const cancel = { value: false };

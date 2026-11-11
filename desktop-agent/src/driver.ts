@@ -25,6 +25,8 @@ export interface DesktopDriver {
   capture(displayId: string): Promise<DesktopFrame>;
   locate(frame: DesktopFrame, anchor: DesktopAnchor, anchorPath: string): Promise<DesktopMatch[]>;
   click(frame: DesktopFrame, match: DesktopMatch, fraction?: number): Promise<void>;
+  holdStart(frame: DesktopFrame, match: DesktopMatch): Promise<void>;
+  hover(frame: DesktopFrame, match: DesktopMatch): Promise<void>;
   type(value: string): Promise<void>;
   select(value: string): Promise<void>;
   releaseAll(): Promise<void>;

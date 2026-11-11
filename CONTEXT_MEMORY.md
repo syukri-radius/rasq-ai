@@ -402,8 +402,11 @@ Geometric labels include `unknown`; confidence intentionally remains low and evi
 The supported saved control taxonomy is:
 
 ```text
-input, button, dropdown, date_picker, checkbox, toggle, slider, upload, download
+input, button, dropdown, date_picker, checkbox, toggle, slider, upload, download,
+text, w_button, w_text, s_input, p_input, p_button, h_button, timer, gesture_arena
 ```
+
+`text`, `w_text`, `timer`, and `gesture_arena` are review-only subjects until an explicit oracle/pattern exists; visual cases never click them. `s_input` is a composite search field/icon/button anchor and `p_input` uses a vault placeholder. `p_button` and `h_button` generate bounded `hold` and `hover` actions (default 1000 ms, allowed 100–10000 ms in both runners). AI enrichment may classify these types from explicit visible evidence, while local geometry does not claim semantic/font/realtime detection.
 
 ### Hash and grouping contracts
 

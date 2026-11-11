@@ -56,8 +56,9 @@ export async function POST(req: Request) {
       }
       if (visualMode) {
         const interactions = t.data.steps.filter((s) => !["navigate", "assert", "wait"].includes(s.action));
-        if (!interactions.length || interactions.some((s) => !s.controlId || !ctlIds.has(s.controlId))) {
-          warnings.push(`Dropped "${t.data.title}": every visual interaction must reference a supplied saved control.`);
+        const reviewSubjects = t.data.steps.filter((s) => s.action === "assert" && s.controlId);
+        if ((!interactions.length && !reviewSubjects.length) || interactions.some((s) => !s.controlId || !ctlIds.has(s.controlId)) || reviewSubjects.some((s) => !s.controlId || !ctlIds.has(s.controlId))) {
+          warnings.push(`Dropped "${t.data.title}": every visual interaction or review-only assertion must reference a supplied saved control.`);
           return;
         }
         if (t.data.steps[0]?.action !== "navigate" || t.data.steps.at(-1)?.action !== "assert") {
@@ -85,8 +86,9 @@ export async function POST(req: Request) {
         const batch = visualControls.slice(i, i + 50);
         const system = await buildSystem(
           db,
-          `TASK: visual-only test design from saved Record & Visual Scan results. Output schema: {"testCases":[{"title":string,"category":"positive","priority":"P2","requirementIds":[],"preconditions":string[],"testData":{string:string},"steps":[{"order":int,"action":"navigate|click|type|select|check|uncheck|toggle|slider|upload|download|assert|wait","target":string,"controlId":string|null,"data":string|null,"expected":string|null}],"expected":string,"assumptions":string[]}]}.
-Generate positive interaction/smoke cases only from the supplied saved controls. requirementIds MUST be [] because no SRS was supplied. controlId must be copied from a supplied control for every interaction step. Never infer business rules, negative/boundary behaviour, selectors or requirement IDs. Start with navigate and finish with assert. Limit assertions to observable interactions, pixel transitions, supplied text, or explicit manual review. Use synthetic data and vault placeholders for credentials.`,
+          `TASK: visual-only test design from saved Record & Visual Scan results. Output schema: {"testCases":[{"title":string,"category":"positive","priority":"P2","requirementIds":[],"preconditions":string[],"testData":{string:string},"steps":[{"order":int,"action":"navigate|click|hold|hover|type|select|check|uncheck|toggle|slider|upload|download|assert|wait","target":string,"controlId":string|null,"data":string|null,"expected":string|null}],"expected":string,"assumptions":string[]}]}.
+Generate positive interaction/smoke cases only from the supplied saved controls. requirementIds MUST be [] because no SRS was supplied. controlId must be copied from a supplied control for every interaction step. Never infer business rules, negative/boundary behaviour, selectors or requirement IDs. Start with navigate and finish with assert. Limit assertions to observable interactions, pixel transitions, supplied text, or explicit manual review. Use synthetic data and vault placeholders for credentials.
+For p_button use hold and for h_button use hover, with data set to a bounded duration in milliseconds. For text, w_text, timer and gesture_arena do not click or invent an interaction: create a review-only assertion with the saved controlId and require human verification of the supplied visual expectation. S_Input represents one grouped search field/icon object and p_input requires a vault placeholder.`,
         );
         const user = untrusted("saved visual controls", redact(JSON.stringify(batch)).text);
         const parsed = AiTestsSchema.parse(parseJson(await callModel(route, { system, user })));
@@ -97,8 +99,9 @@ Generate positive interaction/smoke cases only from the supplied saved controls.
         const batch = reqs.slice(i, i + 6);
         const system = await buildSystem(
           db,
-          `TASK: SRS test design. Output schema: {"testCases":[{"title":string,"category":"positive|negative|boundary|security|privacy|accessibility|performance|resilience","priority":"P0|P1|P2|P3","requirementIds":string[],"preconditions":string[],"testData":{string:string},"steps":[{"order":int,"action":"navigate|click|type|select|check|uncheck|toggle|slider|upload|download|assert|wait","target":string,"controlId":string|null,"data":string|null,"expected":string|null}],"expected":string,"assumptions":string[]}]}.
-requirementIds must use the exact IDs supplied. controlId must be one of the supplied control ids or null (never invent). Last step must be an "assert" with a measurable "expected". Do not generate irrelevant variants.`,
+          `TASK: SRS test design. Output schema: {"testCases":[{"title":string,"category":"positive|negative|boundary|security|privacy|accessibility|performance|resilience","priority":"P0|P1|P2|P3","requirementIds":string[],"preconditions":string[],"testData":{string:string},"steps":[{"order":int,"action":"navigate|click|hold|hover|type|select|check|uncheck|toggle|slider|upload|download|assert|wait","target":string,"controlId":string|null,"data":string|null,"expected":string|null}],"expected":string,"assumptions":string[]}]}.
+requirementIds must use the exact IDs supplied. controlId must be one of the supplied control ids or null (never invent). Last step must be an "assert" with a measurable "expected". Do not generate irrelevant variants.
+For p_button use hold and for h_button use hover with a bounded millisecond duration. Never click text, w_text, timer or gesture_arena; use explicit manual review unless the requirement supplies a supported oracle. S_Input is one grouped search object and p_input uses only a vault placeholder.`,
         );
         const user = `Requirements:\n${untrusted("requirements", redact(JSON.stringify(batch.map((r) => ({ id: r.reqKey, text: r.text, acceptance: r.acceptance, ambiguity: r.ambiguity })))).text)}\n\nAvailable visual controls (ids are RASQ-Ai anchors):\n${JSON.stringify(bindable.slice(0, 150))}`;
         const parsed = AiTestsSchema.parse(parseJson(await callModel(route, { system, user })));

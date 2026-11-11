@@ -28,7 +28,7 @@ async function input(): Promise<DesktopCompileInput> {
   return {
     workflow: { id: "workflow-1", projectId: "project-1", version: 3, provenance: "rasq-local-rules-v1", n8n: workflow },
     screens: [{ id: "screen-1", projectId: "project-1", width: 200, height: 120, imagePath: "screen.png" }],
-    controls: [{ id: "control-1", screenId: "screen-1", x: 20, y: 20, w: 30, h: 30, locatorHash: "rq1:0000000000000000" }],
+    controls: [{ id: "control-1", type: "button", screenId: "screen-1", x: 20, y: 20, w: 30, h: 30, locatorHash: "rq1:0000000000000000" }],
     target: { applicationName: "Fixture", windowTitle: "Fixture Window", displayId: "main", requireFocus: true },
     readImage: async () => image,
   };
@@ -85,6 +85,31 @@ test("credential fixtures require local secret references and never embed their 
   const compiled = createDesktopBundle(await compileDesktopWorkflow(source));
   assert.equal(compiled.files["robotjs.cjs"].toString().includes("<FIXTURE password>"), false);
   assert.equal(compiled.manifest.steps[3].kind === "action" && compiled.manifest.steps[3].secretRef, "QA_PASSWORD");
+});
+
+test("review-only controls reject manually injected desktop input", async () => {
+  for (const type of ["text", "w_text", "timer", "gesture_arena"]) {
+    const source = await input();
+    source.controls = source.controls.map((control) => ({ ...control, type }));
+    const result = await compileDesktopWorkflow(source);
+    assert.ok(result.diagnostics.some((d) => d.code === "DESKTOP_CONTROL_REVIEW_ONLY"));
+    assert.throws(() => createDesktopBundle(result));
+  }
+});
+
+test("hold and hover are bounded deterministic desktop actions", async () => {
+  for (const action of ["hold", "hover"] as const) {
+    const source = await input();
+    source.workflow.n8n = { ...workflow, nodes: nodes.map((n) => n.id === ids.action ? { ...n, parameters: { ...n.parameters, action, data: "100" } } : n) };
+    const bundle = createDesktopBundle(await compileDesktopWorkflow(source));
+    const step = bundle.manifest.steps[3];
+    assert.ok(step.kind === "action" && step.action === action && step.data === "100");
+    const script = bundle.files["robotjs.cjs"].toString();
+    assert.ok(script.includes(`step.action === "${action}"`));
+    source.workflow.n8n = { ...workflow, nodes: nodes.map((n) => n.id === ids.action ? { ...n, parameters: { ...n.parameters, action, data: "50" } } : n) };
+    const invalid = await compileDesktopWorkflow(source);
+    assert.ok(invalid.diagnostics.some((d) => d.code === "DESKTOP_ACTION_DURATION_INVALID"));
+  }
 });
 
 test("integrity verification rejects modified bundle files", async () => {

@@ -51,9 +51,12 @@ function locate(frame, anchor) {
   if (matches.length !== 1) throw new Error("Strict anchor validation found " + matches.length + " matches for control " + anchor.controlId + "; no input dispatched.");
   return { match: matches[0], needle };
 }
-function click(frame, found, fraction = 0.5) {
+function move(frame, found, fraction = 0.5) {
   const point = frame.image.toScreenPoint({ x: found.match.x + Math.floor(found.needle.width * fraction), y: found.match.y + Math.floor(found.needle.height / 2) });
   robot.moveMouseSmooth(point.x, point.y);
+}
+function click(frame, found, fraction = 0.5) {
+  move(frame, found, fraction);
   robot.mouseClick("left");
 }
 function record(step, status, message, extra = {}) {
@@ -118,8 +121,23 @@ async function main() {
     actionStarted = Date.now();
     const value = step.action === "type" ? (step.secretRef ? process.env[step.secretRef] : step.data || "") : "";
     if (step.action === "type" && step.secretRef && !value) throw new Error("Secret environment variable is empty; no click or text input was dispatched.");
-    if (step.action === "slider") click(before, found, Math.max(0, Math.min(1, Number(step.data || 50) / 100)));
-    else click(before, found);
+    const timedEvidence = {};
+    if (step.action === "hold") {
+      const durationMs = Number(step.data || 1000);
+      move(before, found);
+      robot.mouseToggle("down", "left");
+      try { await sleep(durationMs); } finally { robot.mouseToggle("up", "left"); }
+      timedEvidence.holdMs = durationMs;
+    } else if (step.action === "hover") {
+      const durationMs = Number(step.data || 1000);
+      move(before, found);
+      await sleep(durationMs);
+      timedEvidence.hoverMs = durationMs;
+    } else if (step.action === "slider") {
+      click(before, found, Math.max(0, Math.min(1, Number(step.data || 50) / 100)));
+    } else {
+      click(before, found);
+    }
     if (step.action === "type") {
       robot.keyTap("a", process.platform === "darwin" ? "command" : "control");
       robot.typeString(value);
@@ -129,7 +147,7 @@ async function main() {
       robot.keyTap("enter");
     }
     const after = capture();
-    const evidence = { controlId: step.anchor.controlId, beforeSha256: before.sha256, afterSha256: after.sha256, regionChanged: before.sha256 !== after.sha256 };
+    const evidence = { controlId: step.anchor.controlId, beforeSha256: before.sha256, afterSha256: after.sha256, regionChanged: before.sha256 !== after.sha256, ...timedEvidence };
     record(step, "passed", step.action + " dispatched after one strict anchor match; this is not business-success evidence.", evidence);
   }
   const status = summary.failed ? "failed" : needsReview ? "needs-review" : attended ? "passed" : "skipped";
