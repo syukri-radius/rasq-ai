@@ -380,17 +380,17 @@ export default function ScanPage() {
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[360px_1fr]">
         <Card title="Evidence source">
-          <div className="mb-3 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+          <div className="mb-3 flex gap-1 rounded-lg bg-well p-1 text-sm">
             {(["record", "upload", "capture"] as const).map((t) => (
-              <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-2 py-1 capitalize ${tab === t ? "bg-white font-semibold shadow-sm" : "text-slate-600"}`}>{t === "capture" ? "Capture URL" : t === "upload" ? "Upload" : "Record screen"}</button>
+              <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-2 py-1 capitalize ${tab === t ? "bg-raised font-semibold text-ink shadow-sm" : "text-muted"}`}>{t === "capture" ? "Capture URL" : t === "upload" ? "Upload" : "Record screen"}</button>
             ))}
           </div>
           {tab === "record" && (
             <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-lg bg-slate-900 px-4 py-3 text-white">
-                <span className={`h-3 w-3 rounded-full ${rstate === "recording" ? "animate-pulse bg-rose-500" : rstate === "paused" ? "bg-amber-400" : "bg-slate-600"}`} />
+              <div className="flex items-center gap-3 rounded-lg border bg-well px-4 py-3 text-ink">
+                <span className={`h-3 w-3 rounded-full ${rstate === "recording" ? "animate-pulse bg-danger" : rstate === "paused" ? "bg-warn" : "bg-faint"}`} />
                 <span className="font-mono text-2xl">{fmt(elapsed)}</span>
-                <span className="ml-auto text-xs uppercase tracking-wide text-slate-400">{rstate}</span>
+                <span className="ml-auto text-xs uppercase tracking-wide text-muted">{rstate}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <Btn variant="danger" onClick={start} disabled={rstate !== "idle" || !current}><Circle size={14} /> Start</Btn>
@@ -398,20 +398,20 @@ export default function ScanPage() {
                 <Btn variant="primary" onClick={stop} disabled={rstate === "idle"}><Square size={14} /> Stop</Btn>
                 <Btn onClick={cancel} disabled={rstate === "idle" && !blob}><X size={14} /> Cancel</Btn>
               </div>
-              <p className="text-xs text-slate-500">Choose “Entire screen” in the browser prompt. Frames are sampled every 1.5 s and grouped by page/window similarity so a recording that visits several pages yields one group per page.</p>
+              <p className="text-xs text-muted">Choose “Entire screen” in the browser prompt. Frames are sampled every 1.5 s and grouped by page/window similarity so a recording that visits several pages yields one group per page.</p>
               {blob && <video controls className="w-full rounded-lg" src={URL.createObjectURL(blob.blob)} />}
             </div>
           )}
           {tab === "upload" && (
             <div className="space-y-3">
-              <label className="flex h-28 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 text-sm text-slate-600 hover:border-indigo-400">
+              <label className="flex h-28 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-line-strong text-sm text-muted hover:border-accent-line">
                 <Upload size={20} /> Screenshots (PNG/JPEG/WebP) or screen recordings
                 <input type="file" multiple accept="image/*,video/*" className="hidden" onChange={(e) => { void onFiles(e.target.files); e.target.value = ""; }} />
               </label>
-              <label className="flex items-center gap-2 text-xs text-slate-600">Video sample interval (s)<input type="number" min={0.5} step={0.5} value={every} onChange={(e) => setEvery(Math.max(0.5, Number(e.target.value) || 1))} className={`${inputCls} w-20`} /></label>
+              <label className="flex items-center gap-2 text-xs text-muted">Video sample interval (s)<input type="number" min={0.5} step={0.5} value={every} onChange={(e) => setEvery(Math.max(0.5, Number(e.target.value) || 1))} className={`${inputCls} w-20`} /></label>
               {recs.length > 0 && (
                 <div className="space-y-1 text-xs">
-                  <div className="font-semibold text-slate-500">Saved recordings</div>
+                  <div className="font-semibold text-muted">Saved recordings</div>
                   {recs.map((r) => (
                     <div key={r.id} className="flex items-center justify-between gap-2 rounded border p-2">
                       <span className="truncate">{r.name} · {fmt(r.durationMs)} · {(r.sizeBytes / 1e6).toFixed(1)} MB</span>
@@ -431,23 +431,23 @@ export default function ScanPage() {
               <input className={inputCls} placeholder="https://… or /demo-target" value={capture.url} onChange={(e) => setCapture({ ...capture, url: e.target.value })} />
               <div className="flex gap-2"><input type="number" className={inputCls} value={capture.w} onChange={(e) => setCapture({ ...capture, w: Number(e.target.value) })} /><input type="number" className={inputCls} value={capture.h} onChange={(e) => setCapture({ ...capture, h: Number(e.target.value) })} /></div>
               <Btn variant="primary" className="w-full" onClick={doCapture} disabled={!capture.url || !!busy}><Camera size={14} /> Capture screenshot</Btn>
-              <p className="text-xs text-slate-500">Server-side Playwright takes one screenshot of the URL you supply. Try <code>/demo-target</code>.</p>
+              <p className="text-xs text-muted">Server-side Playwright takes one screenshot of the URL you supply. Try <code>/demo-target</code>.</p>
             </div>
           )}
-          {busy && <div className="mt-3 animate-pulse text-sm text-indigo-700">{busy}</div>}
+          {busy && <div className="mt-3 flex items-center gap-2 text-sm text-accent-ink"><span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent-ink" />{busy}</div>}
         </Card>
 
         <Card title={`Page / window groups (${groups.length})`} actions={groups.length > 0 && <div className="flex gap-2"><Btn onClick={resetAll}>Clear</Btn><Btn variant="success" onClick={saveAll} disabled={!!busy}><Save size={14} /> {editingCount ? "Save changes" : "Save all"}</Btn></div>}>
           {groups.length === 0 ? (
-            <p className="py-10 text-center text-sm text-slate-500">No evidence yet. Record, upload or capture to see detected pages and controls.</p>
+            <p className="py-10 text-center text-sm text-muted">No evidence yet. Record, upload or capture to see detected pages and controls.</p>
           ) : (
             <div className="flex gap-3 overflow-x-auto pb-2">
               {groups.map((g) => (
-                <button key={g.key} onClick={() => setSel(g.key)} className={`w-44 shrink-0 rounded-lg border p-2 text-left ${sel === g.key ? "border-indigo-500 ring-2 ring-indigo-200" : "border-slate-200"}`}>
+                <button key={g.key} onClick={() => setSel(g.key)} className={`w-44 shrink-0 rounded-lg border p-2 text-left ${sel === g.key ? "border-accent-line bg-accent-soft" : "border-line"}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={g.rep.dataUrl} alt={g.name} className="h-24 w-full rounded object-cover object-top" />
-                  <input value={g.name} onClick={(e) => e.stopPropagation()} onChange={(e) => { const v = e.target.value; groupsRef.current = groupsRef.current.map((x) => (x.key === g.key ? { ...x, name: v } : x)); setGroups(groupsRef.current); }} className="mt-1 w-full bg-transparent text-sm font-semibold outline-none" />
-                  <div className="text-xs text-slate-500">{g.frames} frame(s) · {(items[g.key] ?? []).filter((i) => i.include).length} controls · {fmt(g.firstMs)}–{fmt(g.lastMs)}</div>
+                  <input value={g.name} onClick={(e) => e.stopPropagation()} onChange={(e) => { const v = e.target.value; groupsRef.current = groupsRef.current.map((x) => (x.key === g.key ? { ...x, name: v } : x)); setGroups(groupsRef.current); }} className="mt-1 w-full rounded bg-transparent text-sm font-semibold" />
+                  <div className="text-xs text-muted">{g.frames} frame(s) · {(items[g.key] ?? []).filter((i) => i.include).length} controls · {fmt(g.firstMs)}–{fmt(g.lastMs)}</div>
                 </button>
               ))}
             </div>
@@ -457,8 +457,8 @@ export default function ScanPage() {
 
       {group && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <Card title={`${group.name} · ${group.rep.width}×${group.rep.height}px source`} actions={<label className="flex items-center gap-1 text-xs text-slate-500"><input type="checkbox" checked={showUnknown} onChange={(e) => setShowUnknown(e.target.checked)} /> show non-controls</label>}>
-            <div className="relative overflow-auto rounded-lg border bg-slate-100">
+          <Card title={`${group.name} · ${group.rep.width}×${group.rep.height}px source`} actions={<label className="flex items-center gap-1 text-xs text-muted"><input type="checkbox" checked={showUnknown} onChange={(e) => setShowUnknown(e.target.checked)} /> show non-controls</label>}>
+            <div className="relative overflow-auto rounded-lg border bg-well">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={group.rep.dataUrl} alt="" className="block w-full" />
               <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${group.rep.width} ${group.rep.height}`} preserveAspectRatio="none">
@@ -469,17 +469,17 @@ export default function ScanPage() {
                 ))}
               </svg>
             </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">{CONTROL_TYPES.map((t) => <span key={t} className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: COLORS[t] }} />{t.replace("_", " ")}</span>)}</div>
-            <p className="mt-2 text-xs text-slate-500">perception stats: edge threshold {group.rep.analysis.stats.edgeThreshold}, {group.rep.analysis.stats.components} components, {group.rep.analysis.stats.merged} merges.</p>
+            <div className="mt-2 flex flex-wrap gap-2 text-[11px]">{CONTROL_TYPES.map((t) => <span key={t} className="flex items-center gap-1"><i className="inline-block h-2.5 w-2.5 rounded-sm border border-line-strong" style={{ background: COLORS[t] }} />{t.replace("_", " ")}</span>)}</div>
+            <p className="mt-2 text-xs text-muted">perception stats: edge threshold {group.rep.analysis.stats.edgeThreshold}, {group.rep.analysis.stats.components} components, {group.rep.analysis.stats.merged} merges.</p>
           </Card>
 
           <Card title={`Controls (${list.filter((i) => i.include).length} selected of ${list.length})`} actions={<Btn variant="primary" onClick={enrich} disabled={localModel || !!busy} title={localModel ? "Pick an AI model above to enable" : ""}><Sparkles size={14} /> Enrich with AI</Btn>}>
             <div className="max-h-[560px] overflow-auto">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-white text-left text-slate-500"><tr><th className="p-1"></th><th className="p-1">Type</th><th className="p-1">Label</th><th className="p-1">Conf.</th><th className="p-1">Box (x,y,w,h)</th></tr></thead>
+                <thead className="sticky top-0 bg-sticky text-left text-muted"><tr><th className="p-1"></th><th className="p-1">Type</th><th className="p-1">Label</th><th className="p-1">Conf.</th><th className="p-1">Box (x,y,w,h)</th></tr></thead>
                 <tbody>
                   {list.filter((i) => showUnknown || i.type !== "unknown").map((i) => (
-                    <tr key={i.id} onClick={() => setHi(i.id)} className={`cursor-pointer border-t align-top ${hi === i.id ? "bg-indigo-50" : ""}`}>
+                    <tr key={i.id} onClick={() => setHi(i.id)} className={`cursor-pointer border-t align-top ${hi === i.id ? "bg-accent-soft" : ""}`}>
                       <td className="p-1"><input type="checkbox" checked={i.include} disabled={i.type === "unknown"} onChange={(e) => upd(i.id, { include: e.target.checked })} /></td>
                       <td className="p-1">
                         <select value={i.type} onChange={(e) => upd(i.id, { type: e.target.value as Item["type"], include: e.target.value !== "unknown" })} className="rounded border px-1 py-0.5">
@@ -488,21 +488,21 @@ export default function ScanPage() {
                         </select>
                         <div className="mt-1"><Badge tone={i.source === "ai" ? undefined : "pending"}>{i.source === "ai" ? `AI ${i.aiModel ?? ""}` : "perception"}</Badge></div>
                       </td>
-                      <td className="p-1"><input value={i.label} placeholder="visible label" onChange={(e) => upd(i.id, { label: e.target.value })} className="w-full rounded border px-1 py-0.5" /><div className="mt-1 text-[10px] leading-snug text-slate-500">{i.evidence}</div></td>
+                      <td className="p-1"><input value={i.label} placeholder="visible label" onChange={(e) => upd(i.id, { label: e.target.value })} className="w-full rounded border px-1 py-0.5" /><div className="mt-1 text-[10px] leading-snug text-muted">{i.evidence}</div></td>
                       <td className="p-1">{i.confidence.toFixed(2)}</td>
-                      <td className="p-1 font-mono text-[10px]">{i.x},{i.y},{i.w},{i.h}<div className="text-slate-400">{i.hash}</div></td>
+                      <td className="p-1 font-mono text-[10px]">{i.x},{i.y},{i.w},{i.h}<div className="text-faint">{i.hash}</div></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <p className="mt-2 text-xs text-slate-500">Confidence reflects visual evidence only. Perception labels come from geometry; AI provenance is stored separately. Locators are visual (region + template hash), never guessed DOM selectors.</p>
+            <p className="mt-2 text-xs text-muted">Confidence reflects visual evidence only. Perception labels come from geometry; AI provenance is stored separately. Locators are visual (region + template hash), never guessed DOM selectors.</p>
           </Card>
         </div>
       )}
 
       <Card title={`Saved screens (${saved.length})`} className="mt-4">
-        {saved.length === 0 ? <p className="text-sm text-slate-500">Nothing saved for this project yet.</p> : (
+        {saved.length === 0 ? <p className="text-sm text-muted">Nothing saved for this project yet.</p> : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {saved.map((s) => (
               <div key={s.id} className="rounded-lg border p-2">
@@ -515,8 +515,8 @@ export default function ScanPage() {
                     <Btn variant="danger" className="!px-1.5 !py-0.5" onClick={async () => { await api(`/api/screens/${s.id}`, { method: "DELETE" }); void refresh(); }}><Trash2 size={12} /></Btn>
                   </div>
                 </div>
-                <div className="text-xs text-slate-500">{s.controls.length} controls · {s.width}×{s.height} · {s.groupKey} · {s.source}</div>
-                {s.aiModel && <div className="text-[11px] text-indigo-700">AI: {s.aiModel}</div>}
+                <div className="text-xs text-muted">{s.controls.length} controls · {s.width}×{s.height} · {s.groupKey} · {s.source}</div>
+                {s.aiModel && <div className="text-[11px] text-accent-ink">AI: {s.aiModel}</div>}
               </div>
             ))}
           </div>

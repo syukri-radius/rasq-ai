@@ -45,8 +45,8 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{title}</h1>
-        {subtitle && <p className="mt-1 max-w-3xl text-sm text-slate-600">{subtitle}</p>}
+        <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-3xl text-sm text-muted">{subtitle}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
@@ -55,10 +55,10 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
 
 export function Card({ title, children, className = "", actions }: { title?: string; children: ReactNode; className?: string; actions?: ReactNode }) {
   return (
-    <section className={`rounded-xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
+    <section className={`rq-glass rounded-xl p-4 ${className}`}>
       {(title || actions) && (
         <div className="mb-3 flex items-center justify-between gap-2">
-          {title && <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>}
+          {title && <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>}
           {actions}
         </div>
       )}
@@ -70,39 +70,41 @@ export function Card({ title, children, className = "", actions }: { title?: str
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "ghost" | "danger" | "success" | "warn" };
 export function Btn({ variant = "ghost", className = "", ...p }: BtnProps) {
   const v = {
-    primary: "bg-indigo-600 text-white hover:bg-indigo-500 border-indigo-600",
-    ghost: "bg-white text-slate-700 hover:bg-slate-100 border-slate-300",
-    danger: "bg-white text-rose-700 hover:bg-rose-50 border-rose-300",
-    success: "bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-600",
-    warn: "bg-amber-500 text-white hover:bg-amber-400 border-amber-500",
+    primary: "border-transparent bg-accent text-on-accent hover:bg-accent-hover",
+    ghost: "border-line-strong bg-raised text-ink hover:bg-raised-hover",
+    danger: "border-danger-line bg-raised text-danger-ink hover:bg-danger-soft",
+    success: "border-transparent bg-ok text-on-ok hover:bg-ok-hover",
+    warn: "border-transparent bg-warn text-on-warn hover:bg-warn-hover",
   }[variant];
-  return <button {...p} className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${v} ${className}`} />;
+  // A disabled button drops its fill for a dashed outline instead of fading, so its label stays readable in every theme.
+  return <button {...p} className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:border-dashed disabled:border-line-strong disabled:bg-transparent disabled:text-muted ${v} ${className}`} />;
 }
 
+// Status tones come from fixed status hues, not from the theme accent. Every badge also states its status in words.
 const tones: Record<string, string> = {
-  passed: "bg-emerald-100 text-emerald-800",
-  failed: "bg-rose-100 text-rose-800",
-  error: "bg-rose-100 text-rose-800",
-  warning: "bg-amber-100 text-amber-800",
-  "needs-review": "bg-violet-100 text-violet-800",
-  skipped: "bg-slate-200 text-slate-700",
-  running: "bg-sky-100 text-sky-800",
-  pending: "bg-slate-100 text-slate-500",
-  P0: "bg-rose-100 text-rose-800",
-  P1: "bg-orange-100 text-orange-800",
-  P2: "bg-amber-100 text-amber-800",
-  P3: "bg-slate-200 text-slate-700",
+  passed: "border-ok-line bg-ok-soft text-ok-ink",
+  failed: "border-danger-line bg-danger-soft text-danger-ink",
+  error: "border-danger-line bg-danger-soft text-danger-ink",
+  warning: "border-warn-line bg-warn-soft text-warn-ink",
+  "needs-review": "border-review-line bg-review-soft text-review-ink",
+  skipped: "border-line-strong bg-tint-2 text-ink",
+  running: "border-info-line bg-info-soft text-info-ink",
+  pending: "border-line bg-tint-1 text-ink",
+  P0: "border-danger-line bg-danger-soft text-danger-ink",
+  P1: "border-orange-line bg-orange-soft text-orange-ink",
+  P2: "border-warn-line bg-warn-soft text-warn-ink",
+  P3: "border-line-strong bg-tint-2 text-ink",
 };
 export function Badge({ children, tone }: { children: ReactNode; tone?: string }) {
-  return <span className={`inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone ?? String(children)] ?? "bg-indigo-100 text-indigo-800"}`}>{children}</span>;
+  return <span className={`inline-block whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-semibold ${tones[tone ?? String(children)] ?? "border-accent-line bg-accent-soft text-accent-ink"}`}>{children}</span>;
 }
 
 export function Notice({ kind = "info", children }: { kind?: "info" | "error" | "ok" | "warn"; children: ReactNode }) {
-  const c = { info: "border-sky-200 bg-sky-50 text-sky-900", error: "border-rose-200 bg-rose-50 text-rose-900", ok: "border-emerald-200 bg-emerald-50 text-emerald-900", warn: "border-amber-200 bg-amber-50 text-amber-900" }[kind];
+  const c = { info: "border-info-line bg-info-soft text-info-ink", error: "border-danger-line bg-danger-soft text-danger-ink", ok: "border-ok-line bg-ok-soft text-ok-ink", warn: "border-warn-line bg-warn-soft text-warn-ink" }[kind];
   return <div className={`rounded-lg border px-3 py-2 text-sm ${c}`}>{children}</div>;
 }
 
-export const inputCls = "w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200";
+export const inputCls = "w-full rounded-lg border border-line-strong bg-field px-3 py-1.5 text-sm text-ink";
 
 export function download(name: string, text: string, type = "application/json") {
   const a = document.createElement("a");

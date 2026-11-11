@@ -92,7 +92,7 @@ export default function TestsPage() {
   };
 
   const docReqs = reqs.filter((r) => !doc || r.docId === doc);
-  const sel = "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm";
+  const sel = "rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm text-ink";
   const totalControls = screens.reduce((n, s) => n + s.controls.length, 0);
 
   return (
@@ -106,8 +106,8 @@ export default function TestsPage() {
           <Notice kind={converted.unresolvedAnchors ? "warn" : "ok"}>
             <div className="flex flex-wrap items-center gap-3">
               <span>Converted to n8n JSON: {converted.nodes} nodes. {converted.unresolvedAnchors} action step(s) have no visual anchor and will be skipped, never guessed.</span>
-              <Link className="inline-flex items-center gap-1 rounded-lg border border-indigo-300 bg-white px-3 py-1.5 text-sm font-medium text-indigo-700" href={`/workflows?workflow=${converted.id}`}><Workflow size={14} /> Open &amp; run in Workflows</Link>
-              <a className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm" href={`/api/workflows/${converted.id}/export`}><FileJson size={14} /> Download n8n JSON</a>
+              <Link className="inline-flex items-center gap-1 rounded-lg border border-accent-line bg-raised px-3 py-1.5 text-sm font-medium text-accent-ink hover:bg-raised-hover" href={`/workflows?workflow=${converted.id}`}><Workflow size={14} /> Open &amp; run in Workflows</Link>
+              <a className="inline-flex items-center gap-1 rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-sm text-ink hover:bg-raised-hover" href={`/api/workflows/${converted.id}/export`}><FileJson size={14} /> Download n8n JSON</a>
             </div>
             {converted.notes && <p className="mt-2 text-xs">{converted.notes}</p>}
           </Notice>
@@ -115,9 +115,9 @@ export default function TestsPage() {
       )}
 
       <Card title="1 · Generate test scenarios" className="mb-4">
-        <div className="mb-3 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm md:w-fit">
+        <div className="mb-3 flex gap-1 rounded-lg bg-well p-1 text-sm md:w-fit">
           {([{ id: "requirements", label: "From SRS document" }, { id: "visual", label: "From saved visual scans" }] as const).map((v) => (
-            <button key={v.id} onClick={() => { setSource(v.id); setMsg(null); setConverted(null); }} className={`rounded-md px-3 py-1.5 ${source === v.id ? "bg-white font-semibold shadow-sm" : "text-slate-600"}`}>{v.label}</button>
+            <button key={v.id} onClick={() => { setSource(v.id); setMsg(null); setConverted(null); }} className={`rounded-md px-3 py-1.5 ${source === v.id ? "bg-raised font-semibold text-ink shadow-sm" : "text-muted"}`}>{v.label}</button>
           ))}
         </div>
         {source === "requirements" ? (
@@ -127,43 +127,43 @@ export default function TestsPage() {
               {docs.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
             <Btn variant="primary" onClick={generate} disabled={busy || !doc}><Wand2 size={14} /> {busy ? "Generating…" : cases.length ? "Regenerate SRS cases (replaces all)" : "Generate SRS test cases"}</Btn>
-            <span className="text-xs text-slate-500">Exact requirement IDs are preserved. Saved visual anchors bind by label match where justified.</span>
+            <span className="text-xs text-muted">Exact requirement IDs are preserved. Saved visual anchors bind by label match where justified.</span>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <Btn variant="primary" onClick={generate} disabled={busy || !screens.length || selectedScreens?.length === 0}><Wand2 size={14} /> {busy ? "Generating…" : "Generate visual cases (append)"}</Btn>
-              <span className="text-xs text-slate-500">{totalControls} saved controls on {screens.length} screens. Visual cases are positive P2 interactions with bound anchors and no invented SRS IDs.</span>
+              <span className="text-xs text-muted">{totalControls} saved controls on {screens.length} screens. Visual cases are positive P2 interactions with bound anchors and no invented SRS IDs.</span>
             </div>
             {screens.length ? (
-              <div className="rounded-lg border border-slate-200 p-3">
+              <div className="rounded-lg border border-line p-3">
                 <label className="mb-2 flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={selectedScreens === null} onChange={(e) => setSelectedScreens(e.target.checked ? null : [])} /> All saved screens</label>
                 <div className="grid max-h-36 gap-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">
                   {screens.map((s) => (
-                    <label key={s.id} className="flex items-center gap-2 rounded border border-slate-200 px-2 py-1.5 text-xs">
+                    <label key={s.id} className="flex items-center gap-2 rounded border border-line px-2 py-1.5 text-xs">
                       <input type="checkbox" checked={selectedScreens === null || selectedScreens.includes(s.id)} onChange={(e) => toggleScreen(s.id, e.target.checked)} />
-                      <span className="truncate">{s.name}</span><span className="ml-auto whitespace-nowrap text-slate-500">{s.controls.length} controls</span>
+                      <span className="truncate">{s.name}</span><span className="ml-auto whitespace-nowrap text-muted">{s.controls.length} controls</span>
                     </label>
                   ))}
                 </div>
-                {selectedScreens?.length === 0 && <p className="mt-2 text-xs text-amber-700">Select at least one saved screen.</p>}
+                {selectedScreens?.length === 0 && <p className="mt-2 text-xs text-warn-ink">Select at least one saved screen.</p>}
               </div>
-            ) : <p className="text-sm text-slate-500">No saved scans yet. Save controls in Record &amp; Visual Scan first.</p>}
+            ) : <p className="text-sm text-muted">No saved scans yet. Save controls in Record &amp; Visual Scan first.</p>}
           </div>
         )}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t pt-3">
-          <span className="text-xs text-slate-500">Visual generation appends by default so it does not erase SRS-based scenarios.</span>
+          <span className="text-xs text-muted">Visual generation appends by default so it does not erase SRS-based scenarios.</span>
           <span className="flex gap-2">
-            {current && <a className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100" href={`/api/tests/export?projectId=${current.id}&format=csv`}><Download size={14} /> CSV</a>}
-            {current && <a className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100" href={`/api/tests/export?projectId=${current.id}&format=json`}><Download size={14} /> Scenario JSON</a>}
+            {current && <a className="inline-flex items-center gap-1 rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-sm text-ink hover:bg-raised-hover" href={`/api/tests/export?projectId=${current.id}&format=csv`}><Download size={14} /> CSV</a>}
+            {current && <a className="inline-flex items-center gap-1 rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-sm text-ink hover:bg-raised-hover" href={`/api/tests/export?projectId=${current.id}&format=json`}><Download size={14} /> Scenario JSON</a>}
             <Btn variant="danger" disabled={!cases.length} onClick={async () => { if (current && confirm("Delete all test cases for this project?")) { await api(`/api/tests?projectId=${current.id}`, { method: "DELETE" }); setConverted(null); void load(); } }}><Trash2 size={14} /></Btn>
           </span>
         </div>
       </Card>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex gap-1 rounded-lg bg-slate-200 p-1 text-sm">
-          {(["cases", "matrix"] as const).map((v) => <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1 ${view === v ? "bg-white font-semibold shadow-sm" : "text-slate-600"}`}>{v === "cases" ? `Cases (${shown.length})` : "Traceability matrix"}</button>)}
+        <div className="flex gap-1 rounded-lg bg-well p-1 text-sm">
+          {(["cases", "matrix"] as const).map((v) => <button key={v} onClick={() => setView(v)} className={`rounded-md px-3 py-1 ${view === v ? "bg-raised font-semibold text-ink shadow-sm" : "text-muted"}`}>{v === "cases" ? `Cases (${shown.length})` : "Traceability matrix"}</button>)}
         </div>
         <select className={sel} value={fc} onChange={(e) => setFc(e.target.value)}><option value="">All categories</option>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select>
         <select className={sel} value={fp} onChange={(e) => setFp(e.target.value)}><option value="">All priorities</option>{PRIORITIES.map((c) => <option key={c}>{c}</option>)}</select>
@@ -174,46 +174,46 @@ export default function TestsPage() {
         <Card>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-slate-500"><tr><th className="p-2">Case</th><th className="p-2">Title</th><th className="p-2">Category</th><th className="p-2">Pri</th><th className="p-2">Requirements</th><th className="p-2">Anchors</th></tr></thead>
+              <thead className="text-left text-xs uppercase text-muted"><tr><th className="p-2">Case</th><th className="p-2">Title</th><th className="p-2">Category</th><th className="p-2">Pri</th><th className="p-2">Requirements</th><th className="p-2">Anchors</th></tr></thead>
               <tbody>
                 {shown.map((c) => {
                   const act = c.steps.filter((s) => !["navigate", "assert", "wait"].includes(s.action));
                   const bound = act.filter((s) => s.controlId).length;
                   return (
                     <Fragment key={c.id}>
-                      <tr className="cursor-pointer border-t hover:bg-slate-50" onClick={() => setOpen(open === c.id ? "" : c.id)}>
+                      <tr className="cursor-pointer border-t hover:bg-tint-1" onClick={() => setOpen(open === c.id ? "" : c.id)}>
                         <td className="p-2 font-mono text-xs font-semibold">{c.caseKey}</td>
                         <td className="p-2">{c.title}</td>
                         <td className="p-2"><Badge>{c.category}</Badge></td>
                         <td className="p-2"><Badge>{c.priority}</Badge></td>
-                        <td className="p-2 font-mono text-xs text-indigo-700">{c.requirementKeys.length ? c.requirementKeys.join(", ") : <Badge tone="pending">Visual only</Badge>}</td>
+                        <td className="p-2 font-mono text-xs text-accent-ink">{c.requirementKeys.length ? c.requirementKeys.join(", ") : <Badge tone="pending">Visual only</Badge>}</td>
                         <td className="p-2 text-xs">{act.length ? `${bound}/${act.length} bound` : "—"}</td>
                       </tr>
                       {open === c.id && (
-                        <tr className="bg-slate-50">
+                        <tr className="bg-tint-1">
                           <td colSpan={6} className="p-4">
                             <div className="grid gap-4 md:grid-cols-2">
                               <div>
-                                <h4 className="text-xs font-semibold uppercase text-slate-500">Preconditions</h4>
+                                <h4 className="text-xs font-semibold uppercase text-muted">Preconditions</h4>
                                 <ul className="mb-3 list-disc pl-5 text-sm">{c.preconditions.map((p, i) => <li key={i}>{p}</li>)}</ul>
-                                <h4 className="text-xs font-semibold uppercase text-slate-500">Synthetic test data</h4>
-                                <pre className="mb-3 overflow-auto rounded bg-white p-2 text-xs">{JSON.stringify(c.testData, null, 2)}</pre>
-                                <h4 className="text-xs font-semibold uppercase text-slate-500">Expected result</h4>
+                                <h4 className="text-xs font-semibold uppercase text-muted">Synthetic test data</h4>
+                                <pre className="mb-3 overflow-auto rounded bg-field p-2 text-xs">{JSON.stringify(c.testData, null, 2)}</pre>
+                                <h4 className="text-xs font-semibold uppercase text-muted">Expected result</h4>
                                 <p className="mb-3 text-sm">{c.expected}</p>
-                                {c.assumptions.length > 0 && <><h4 className="text-xs font-semibold uppercase text-amber-700">Assumptions / ambiguity</h4><ul className="list-disc pl-5 text-sm text-amber-900">{c.assumptions.map((p, i) => <li key={i}>{p}</li>)}</ul></>}
+                                {c.assumptions.length > 0 && <><h4 className="text-xs font-semibold uppercase text-warn-ink">Assumptions / ambiguity</h4><ul className="list-disc pl-5 text-sm text-warn-ink">{c.assumptions.map((p, i) => <li key={i}>{p}</li>)}</ul></>}
                               </div>
                               <div>
-                                <h4 className="text-xs font-semibold uppercase text-slate-500">Ordered steps</h4>
+                                <h4 className="text-xs font-semibold uppercase text-muted">Ordered steps</h4>
                                 <ol className="space-y-1 text-sm">
                                   {c.steps.map((s) => (
-                                    <li key={s.order} className="rounded border bg-white p-2">
-                                      <b>{s.order}. {s.action}</b> — {s.target} {s.data ? <code className="rounded bg-slate-100 px-1">{s.data}</code> : null}
+                                    <li key={s.order} className="rounded border bg-field p-2">
+                                      <b>{s.order}. {s.action}</b> — {s.target} {s.data ? <code>{s.data}</code> : null}
                                       {s.controlId ? <Badge>anchor bound</Badge> : !["navigate", "assert", "wait"].includes(s.action) ? <Badge tone="warning">no anchor</Badge> : null}
-                                      {s.expected && <div className="text-xs text-emerald-800">expect: {s.expected}</div>}
+                                      {s.expected && <div className="text-xs text-ok-ink">expect: {s.expected}</div>}
                                     </li>
                                   ))}
                                 </ol>
-                                <p className="mt-2 text-xs text-slate-500">Provenance: {c.provenance}</p>
+                                <p className="mt-2 text-xs text-muted">Provenance: {c.provenance}</p>
                               </div>
                             </div>
                           </td>
@@ -222,7 +222,7 @@ export default function TestsPage() {
                     </Fragment>
                   );
                 })}
-                {shown.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-slate-500">No test cases match this view.</td></tr>}
+                {shown.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-muted">No test cases match this view.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -231,23 +231,23 @@ export default function TestsPage() {
         <Card>
           <div className="overflow-auto">
             <table className="text-xs">
-              <thead><tr><th className="sticky left-0 bg-white p-1 text-left">Requirement</th>{cases.map((c) => <th key={c.id} className="p-1 font-mono [writing-mode:vertical-rl]">{c.caseKey}</th>)}<th className="p-1">Σ</th></tr></thead>
+              <thead><tr><th className="sticky left-0 bg-sticky p-1 text-left">Requirement</th>{cases.map((c) => <th key={c.id} className="p-1 font-mono [writing-mode:vertical-rl]">{c.caseKey}</th>)}<th className="p-1">Σ</th></tr></thead>
               <tbody>
                 {docReqs.map((r) => {
                   const n = cases.filter((c) => c.requirementKeys.includes(r.reqKey)).length;
                   return (
                     <tr key={r.id} className="border-t">
-                      <td className="sticky left-0 whitespace-nowrap bg-white p-1 font-mono font-semibold text-indigo-700">{r.reqKey}</td>
-                      {cases.map((c) => <td key={c.id} className="p-1 text-center">{c.requirementKeys.includes(r.reqKey) ? <span className="inline-block h-3 w-3 rounded-sm bg-indigo-600" /> : ""}</td>)}
-                      <td className={`p-1 text-center font-bold ${n ? "" : "text-rose-600"}`}>{n}</td>
+                      <td className="sticky left-0 whitespace-nowrap bg-sticky p-1 font-mono font-semibold text-accent-ink">{r.reqKey}</td>
+                      {cases.map((c) => <td key={c.id} className="p-1 text-center">{c.requirementKeys.includes(r.reqKey) ? <span className="inline-block h-3 w-3 rounded-sm bg-accent-ink" /> : ""}</td>)}
+                      <td className={`p-1 text-center font-bold ${n ? "" : "text-danger-ink"}`}>{n}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
-            {!docReqs.length && <p className="p-6 text-center text-sm text-slate-500">No SRS requirements in this view. Visual-only cases intentionally have no requirement links.</p>}
+            {!docReqs.length && <p className="p-6 text-center text-sm text-muted">No SRS requirements in this view. Visual-only cases intentionally have no requirement links.</p>}
           </div>
-          <p className="mt-2 text-xs text-slate-500">Rows with Σ = 0 are uncovered requirements. Visual-only cases do not imply SRS coverage.</p>
+          <p className="mt-2 text-xs text-muted">Rows with Σ = 0 are uncovered requirements. Visual-only cases do not imply SRS coverage.</p>
         </Card>
       )}
     </>

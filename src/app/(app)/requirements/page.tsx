@@ -62,7 +62,7 @@ export default function RequirementsPage() {
         <Card title="Add document">
           <div className="space-y-3">
             <input className={inputCls} placeholder="Document name" value={name} onChange={(e) => setName(e.target.value)} />
-            <label className="flex cursor-pointer items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-3 text-sm text-slate-600 hover:border-indigo-400">
+            <label className="flex cursor-pointer items-center gap-2 rounded-lg border-2 border-dashed border-line-strong p-3 text-sm text-muted hover:border-accent-line">
               <FileUp size={18} /> {file ? file.name : "Choose PDF / .md / .txt"}
               <input type="file" accept=".pdf,.txt,.md,.markdown,text/plain,application/pdf" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </label>
@@ -76,27 +76,27 @@ export default function RequirementsPage() {
               <li key={d.id} className="flex items-center justify-between gap-2 py-2">
                 <div>
                   <div className="font-medium">{d.name}</div>
-                  <div className="text-xs text-slate-500">{d.chars.toLocaleString()} chars · sha256 {d.sha256.slice(0, 12)}… · {d.analysisModel ? `AI: ${d.analysisModel}` : "local parser"} · {reqs.filter((r) => r.docId === d.id).length} requirements</div>
+                  <div className="text-xs text-muted">{d.chars.toLocaleString()} chars · sha256 {d.sha256.slice(0, 12)}… · {d.analysisModel ? `AI: ${d.analysisModel}` : "local parser"} · {reqs.filter((r) => r.docId === d.id).length} requirements</div>
                 </div>
                 <Btn variant="danger" onClick={async () => { await api(`/api/requirements?docId=${d.id}`, { method: "DELETE" }); void load(); }}><Trash2 size={14} /></Btn>
               </li>
             ))}
-            {docs.length === 0 && <li className="py-6 text-center text-slate-500">No documents yet.</li>}
+            {docs.length === 0 && <li className="py-6 text-center text-muted">No documents yet.</li>}
           </ul>
         </Card>
       </div>
       <Card title={`Requirements (${reqs.length})`}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-xs uppercase text-slate-500"><tr><th className="p-2">ID</th><th className="p-2">Requirement</th><th className="p-2">Acceptance criteria</th><th className="p-2">Category</th><th className="p-2">Ambiguity</th></tr></thead>
+            <thead className="text-left text-xs uppercase text-muted"><tr><th className="p-2">ID</th><th className="p-2">Requirement</th><th className="p-2">Acceptance criteria</th><th className="p-2">Category</th><th className="p-2">Ambiguity</th></tr></thead>
             <tbody>
               {reqs.map((r) => (
                 <tr key={r.id} className="border-t align-top">
-                  <td className="whitespace-nowrap p-2 font-mono text-xs font-semibold text-indigo-700">{r.reqKey}</td>
+                  <td className="whitespace-nowrap p-2 font-mono text-xs font-semibold text-accent-ink">{r.reqKey}</td>
                   <td className="p-2">{r.text}</td>
-                  <td className="p-2 text-xs">{r.acceptance.length ? <ul className="list-disc pl-4">{r.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul> : <span className="text-slate-400">none stated</span>}</td>
+                  <td className="p-2 text-xs">{r.acceptance.length ? <ul className="list-disc pl-4">{r.acceptance.map((a, i) => <li key={i}>{a}</li>)}</ul> : <span className="text-faint">none stated</span>}</td>
                   <td className="p-2"><Badge>{r.category}</Badge></td>
-                  <td className="p-2 text-xs text-amber-800">{r.ambiguity ?? ""}</td>
+                  <td className="p-2 text-xs text-warn-ink">{r.ambiguity ?? ""}</td>
                 </tr>
               ))}
             </tbody>

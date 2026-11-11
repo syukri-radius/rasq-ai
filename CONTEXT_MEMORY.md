@@ -8,10 +8,11 @@ Point-in-time repository handoff for AI agents and maintainers. Read this with [
 |---|---|
 | Repository | `syukri-radius/rasq-ai` |
 | Product | **RASQ-Ai — trustworthy visual test automation** |
-| Source snapshot reviewed | `8fb19db2143c7ec2ce86cd84d5cd9aaf7a3640a8` plus the uncommitted attended RobotJS Desktop Agent implementation documented here |
-| Memory generated / updated | 2026-11-09 |
-| Review method | Static source review plus typecheck, lint, production build, compiler/agent unit tests, fresh/upgrade migrations, and real HTTP integration with a headless mock desktop agent |
-| Runtime validation at update | Web/agent typechecks and agent build passed; web production build and mock HTTP dry-run/attended/cancellation paths passed; lint retains eight existing unused-disable warnings. No real OS input, packaged agent, external AI provider, or Chromium execution was used. |
+| Application version | `1.0.0` for the web application; `desktop-agent/` is versioned separately at `0.1.0` |
+| Source snapshot reviewed | `26985f028e1c4617acf89e4ef9a67ffa98112335` plus the 1.0.0 glass-theme change documented here. Everything outside the UI layer was last reviewed at `8fb19db2143c7ec2ce86cd84d5cd9aaf7a3640a8` plus the attended RobotJS Desktop Agent implementation |
+| Memory generated / updated | 2026-11-11 for appearance and version; 2026-11-09 for everything else |
+| Review method | 2026-11-11: source review of the UI layer plus web typecheck, lint, unit tests, production build, and scripted Chromium checks of the themed UI. 2026-11-09: static source review plus typecheck, lint, production build, compiler/agent unit tests, fresh/upgrade migrations, and real HTTP integration with a headless mock desktop agent |
+| Runtime validation at update | **2026-11-11 (themes, version):** web typecheck, 30 web unit tests and the production build passed; lint retains the same eight unused-disable warnings. Chromium 153 with software rendering drove the production build. A rendered-pixel audit compared each visible text run with the pixels behind it across 15 UI states (about 2,300 text runs per theme at 1440×900): the lowest text contrast was 5.70:1 in dark purple, 5.48:1 in light purple, 5.48:1 to 6.42:1 in three custom palettes, and 7.50:1 or more in four random palettes (seeds 1, 2, 3 and 5). Dark purple, light purple and one random palette gave the same minimums at 390×844. Six of these twelve runs were repeated on the final build; the other six ran on an earlier build of the same day that differed only in layout classes and one sentence of interface copy. Theme selection, persistence, reload without a frame of another theme, cross-tab sync, keyboard use, refused storage writes and corrupt-storage fallback were exercised through the real UI. `/demo-target` screenshots were byte-identical to the previous build at 1280×800 and 1440×900, and the content box of `main` had the same position and width as in the previous build at eleven viewport widths from 800px to 2560px. Horizontal overflow at 390, 768, 1024 and 1440px matched the previous build, except that the run-summary badges on `/workflows` now wrap instead of overflowing. URL capture returned a byte-identical screenshot, and a Playwright run of a generated 98-step workflow produced the same status and message for every step as the previous build, but only through a local browser-launcher shim, because Playwright's own browser download was unavailable. Not validated: Firefox, Safari, real devices and external AI providers; `desktop-agent/` was neither changed nor re-tested. **2026-11-09 (desktop agent):** Web/agent typechecks and agent build passed; web production build and mock HTTP dry-run/attended/cancellation paths passed; lint retains eight existing unused-disable warnings. No real OS input, packaged agent, external AI provider, or Chromium execution was used. |
 | License file | `Commercial Standard License`, naming PT Radius Data Solusi; see `LICENSE` for its usage/redistribution restrictions and remaining template language |
 
 This document describes the snapshot above. Later commits may invalidate details. Statements in **Known constraints** are observations, not automatically approved feature work.
@@ -78,7 +79,7 @@ The project is currently a compact single-operator application, not a demonstrat
 - `unpdf` for server-side PDF text extraction.
 - `lucide-react` for icons.
 - `pg`, `@types/pg`, and `dotenv` are dependencies, but the reviewed runtime path uses libsql/SQLite rather than PostgreSQL.
-- `package.json` still has the starter name `nextjs-postgresql-template`; UI metadata and runtime behavior identify the app as RASQ-Ai.
+- `package.json` still has the starter name `nextjs-postgresql-template` and now carries `version` `1.0.0`; UI metadata and runtime behavior identify the app as RASQ-Ai. `src/lib/version.ts` exports the same value as `APP_VERSION` for the sidebar, the root metadata (`<meta name="version">`) and `/api/health`; `tests/version.test.ts` fails when it drifts from `package.json` or `package-lock.json`. `desktop-agent/` is versioned separately and remains `0.1.0`.
 
 Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.config.ts`. Server Actions have a configured 50 MB body limit, although the reviewed features primarily use route handlers rather than Server Actions.
 
@@ -86,9 +87,12 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 
 | Path | Responsibility |
 |---|---|
-| `src/app/(app)/layout.tsx` | Shared application shell |
-| `src/components/Shell.tsx` | Navigation and project selector |
-| `src/components/ui.tsx` | Client API helper, project context, UI primitives |
+| `src/app/layout.tsx` | Root HTML/body shared by the app and `/demo-target`; the body keeps its original fixed light classes |
+| `src/app/globals.css` | Tailwind import, `--rq-*` token-to-utility mapping (`@theme inline`), `.rq-app`-scoped base styles, `rq-glass`, React Flow variable mapping |
+| `src/app/(app)/layout.tsx` | Shared application shell; emits the preset theme tokens and the first-paint theme script for app pages only |
+| `src/components/Shell.tsx` | `.rq-app` theme wrapper, glass navigation, project selector, version label, sidebar theme picker |
+| `src/components/ui.tsx` | Client API helper, project context, token-based UI primitives (`Card`, `Btn`, `Badge`, `Notice`, `inputCls`) |
+| `src/components/ThemePicker.tsx` | `useTheme` browser store, `ThemeEffect` (applies the theme to `<html>`), theme picker UI |
 | `src/components/ModelPicker.tsx` | Per-task model route selector |
 | `src/components/DesktopRunPanel.tsx` | Desktop compiler preview/export, agent selection, confirmation, cancellation, live preview |
 | `desktop-agent/` | Isolated secure Electron shell, fixed manifest runner, Windows/mock drivers, headless mock controller, packaging/target |
@@ -119,6 +123,8 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 | `src/lib/screens.ts` | Shared saved-control normalization for screen creation and update-in-place editing |
 | `src/lib/visualCases.ts` | Deterministic positive P2 interaction cases from saved visual controls |
 | `src/lib/types.ts` | Shared control/task/action/category/priority/status constants |
+| `src/lib/theme.ts` | Pure theme engine: theme IDs, `--rq-*` token generation with WCAG contrast fitting and audit, stored-preference parsing, first-paint script |
+| `src/lib/version.ts` | `APP_VERSION`, kept equal to the `package.json` version by a test |
 | `src/lib/api.ts` | `ok`, `fail`, `body`, async route `Params` helpers |
 | `src/db/schema.ts` | Eighteen Drizzle tables and relationships, including desktop agents/events and desktop run metadata |
 | `src/db/index.ts` | Global libsql client, migration and seed initialization |
@@ -133,6 +139,29 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 - Browser-only perception imports must stay out of server-only execution paths except for pure functions such as `hashSimilarity` that do not touch `document` at module initialization.
 - Dynamic route parameters use Next.js Promise-based `params`, wrapped by `Params<T>`.
 - Many data-changing routes use `dynamic = "force-dynamic"`; AI routes also set `maxDuration = 300`.
+- App pages and shared primitives take every colour from the theme tokens below; they contain no fixed palette classes such as `slate-*` or `indigo-*`.
+
+### Appearance and themes (1.0.0)
+
+The app UI is glassmorphic (translucent `rq-glass` panels over a tinted aurora backdrop) and has four themes, chosen per browser:
+
+| Theme ID | Label | Source of colours |
+|---|---|---|
+| `dark-purple` | Dark purple (default) | Preset: background `#0e0a1f`, accent `#7c3aed` |
+| `light-purple` | Light purple | Preset: background `#f1ecff`, accent `#7c3aed` |
+| `custom` | Custom colors | User-chosen accent and background (defaults `#2dd4bf` on `#071a1f`) |
+| `contrast` | Random high contrast | Seeded random palette, dark or light; **Shuffle colors** picks a new seed |
+
+- **Tokens:** `buildTheme` in `src/lib/theme.ts` turns an accent, a background and a level into 59 `--rq-*` custom properties. `globals.css` exposes the colour tokens as Tailwind utilities of the same name (`text-ink`, `text-muted`, `text-faint`, `bg-raised`, `bg-field`, `border-line-strong`, `bg-ok-soft`, `text-danger-ink`, …). Use those utilities; do not add colour opacity modifiers, fixed palette colours or `opacity` on text, because the guarantee below is computed for the token set only.
+- **Contrast guarantee:** because surfaces are translucent, each text token is fitted against the worst case of every surface stack the UI may compose. That contract (bases, one area fill, one item fill) is documented on the `Paint` type. Standard themes keep every text token at WCAG AA (at least 4.5:1); the random theme keeps them at AAA (at least 7:1) and additionally keeps solid fills and control borders at 3:1 or more against adjacent surfaces. `muted` and `faint` are only guaranteed on quiet surfaces, so secondary text never goes inside badges, notices or status-tinted rows. `rq-glass` panels are not nested. A disabled `Btn` is a dashed outline with `text-muted`, not a faded button.
+- **Graceful degradation:** when a custom pair leaves too little contrast, the engine fades the backdrop glow and surface tints and moves text toward pure black or white instead of emitting unreadable text; the chosen background itself is kept. Unusable stored or typed values fall back to defaults. Without `backdrop-filter`, or with `prefers-reduced-transparency: reduce`, glass panels become opaque.
+- **Status colours** (`ok`, `danger`, `warn`, `info`, `review`, `orange`) come from fixed hues and never follow the accent, because they report recorded outcomes. Solid status fills are identical in every standard palette of the same mode, and status text keeps its hue in both presets and every random palette. On a mid-tone or strongly saturated custom background no saturated colour can reach 4.5:1, so status text there fades toward black or white while badge outlines stay coloured; every status is also written out as a word. The control-type overlay/legend colours on `/scan` (`COLORS`) are fixed hexes and are not themed.
+- **Persistence:** `localStorage` key `rasq.theme` holds `{ v, id, custom: { accent, background }, seed, vars? }`. `vars` is only a cache that lets an inline script paint Custom and Random themes before React loads; the picker always recomputes it. The script accepts only known theme IDs and `--rq-*` properties with plain colour/length values. If the browser refuses to store the value, the choice lasts until the page is reloaded. Themes are not stored on the server or per project.
+- **Scope (do not break):** every theme rule is scoped to `.rq-app`, the wrapper rendered by `Shell`, or to `html:has(.rq-app)`. Preset tokens and the first-paint script are emitted by `src/app/(app)/layout.tsx`, not by the root layout. `/demo-target` uses only the root layout and must keep rendering exactly as before: saved `locatorHash` values and run screenshots are compared against its pixels. The `html:has(.rq-app)` rule must stay outside every `@layer`, otherwise the unlayered `:root { color-scheme: light }` wins and native controls stay light in dark themes.
+- **Backdrop geometry:** the three aurora glows in `.rq-app::before` must not overlap; the engine assumes at most one glow behind any point.
+- **Where it is chosen:** the desktop sidebar and the **Appearance** card on `/settings` (the only entry point on narrow screens).
+- **Layout parity:** the sidebar floats with a 12px outer margin; `main` gives those 12px back through its left padding and width cap (`md:pl-4`, `md:max-w-[1488px]`), so the content box keeps the position and width it had before the redesign.
+- **Tests:** `tests/theme.test.ts` checks the thresholds for the presets, a grid of custom pairs and 300 random seeds, re-measures emitted CSS with independent colour math, and covers the status-colour rules, preference parsing, the first-paint whitelist, token/utility parity, the scoping rules above and the glow geometry.
 
 ---
 
@@ -170,7 +199,7 @@ npx playwright install chromium --with-deps
 | `cd desktop-agent && npm run build` | esbuild main/preload/headless bundles with Electron/RobotJS external |
 | `cd desktop-agent && npm run package:win` | Windows-only unsigned development ZIP staging; not a signed installer |
 
-Focused web and agent tests are checked in; no CI configuration was added.
+Focused web and agent tests are checked in; no CI configuration was added. `npm test` picks up every `tests/*.test.ts`, including the theme-engine and version tests.
 
 ### Environment and storage
 
@@ -228,10 +257,10 @@ data/desktop/bundles/<runId>.zip
 | `/tests` | Generate from SRS or selected saved scans, filter cases, view matrix, export CSV/JSON, convert displayed cases to n8n |
 | `/workflows` | Open a converted workflow by `?workflow=<id>`, generate/import/edit/export, dry-run or execute, inspect evidence |
 | `/reports` | Generate and download evidence-based Markdown reports |
-| `/settings` | AI data-sharing switch, per-task models, built-in/generic provider catalog and JSON protocol editor, policies |
-| `/demo-target` | Safe synthetic checkout target; no real payment processing |
+| `/settings` | AI data-sharing switch, per-task models, built-in/generic provider catalog and JSON protocol editor, policies, Appearance (theme picker) |
+| `/demo-target` | Safe synthetic checkout target; no real payment processing. Deliberately outside the themed shell: it always renders its original light design |
 
-The selected project ID is stored in browser `localStorage` under `rasq.project`. The provider prefers the first web project when there is no valid saved selection.
+The selected project ID is stored in browser `localStorage` under `rasq.project`. The provider prefers the first web project when there is no valid saved selection. The selected theme is stored under `rasq.theme` (see **Appearance and themes**).
 
 ### API routes
 
@@ -239,7 +268,7 @@ The `ok` helper returns the supplied JSON payload directly, not wrapped in a `da
 
 | Route | Methods and behavior |
 |---|---|
-| `/api/health` | `GET`: database `select 1`, app/engine health |
+| `/api/health` | `GET`: database `select 1`; returns `{ ok, engine, app, version }` |
 | `/api/projects` | `GET`: all projects; `POST`: create with validated surface fallback |
 | `/api/settings` | `GET`: AI mode, providers plus key-configured flags, routes, policies; `PUT`: update mode/route/policy |
 | `/api/providers` | `POST`/`PATCH`: validate protocol, endpoint, key-env name, models, and declarative JSON config; `DELETE?id=`: remove and reset routes using it |
@@ -611,7 +640,7 @@ These are current-source facts to preserve or address intentionally, not claims 
 10. **SRS regeneration is broad by default:** generating from one SRS replaces the project's full case set unless `replace: false` is supplied. Visual generation appends by default; repeated visual generation can therefore create repeated interactions intentionally.
 11. **Visual assertions have limited oracles:** pixel change and region change do not establish semantic correctness or exact control state.
 12. **Custom n8n nodes are not stock-n8n executables:** compatibility refers to workflow JSON structure/import/export, not availability of RASQ-Ai custom nodes in n8n itself.
-13. **Starter metadata remains:** package name and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
+13. **Starter metadata remains:** the package is versioned `1.0.0`, but its name (`nextjs-postgresql-template`) and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
 14. **No checked-in environment template/deployment manifest:** setup relies on source defaults and README; production topology is not defined here.
 15. **License text needs deliberate handling:** `LICENSE` is not a permissive open-source license. It names PT Radius Data Solusi, states machine/usage/redistribution restrictions, and retains template/source-code language that should be reviewed rather than silently ignored or rewritten.
 16. **AI gateway is synchronous:** the generic contract does not yet provide streaming, retries/failover, OAuth exchange, SigV4, mTLS, usage/cost metering, or provider health routing. Endpoint egress controls remain a deployment responsibility. See `ENTERPRISE_ROADMAP.md` for the recommended sequence.
@@ -619,6 +648,9 @@ These are current-source facts to preserve or address intentionally, not claims 
 18. **Real desktop scope is narrow and unverified here:** the real driver enables only Windows x64 with PNG-enabled RobotJS. No real Windows, macOS, Linux, Citrix, VMware, mobile, or packaged-agent acceptance run has been performed. Linux native installation also hit blocked Node-header download access; `--ignore-scripts` is for mock development only.
 19. **Desktop oracles/platform adapters remain limited:** there is no desktop OCR, native file-dialog, global input recorder, autonomous healing, continuous video, lock-state detection, process-signature validation, or managed VM pool. The portable script cannot focus/verify windows.
 20. **Desktop polling is not a durable general worker fabric:** outbound assignment persists runs and handles stale agents, but it does not provide a general durable Playwright queue, autoscaling, session scheduling, or guaranteed recovery of an interrupted interactive desktop action.
+21. **Theme contrast is a contract, not a lint rule:** the thresholds hold for the token utilities and surface stacks described under **Appearance and themes**. New UI that uses fixed palette classes, colour opacity modifiers, nested glass panels or `opacity` on text falls outside the guarantee and nothing fails automatically. Uploaded screenshots, evidence images and the fixed control-type overlay colours on `/scan` are content and are not themed. The stored theme is per browser, not per user or project.
+22. **Blocked browser storage breaks the app (found during the 1.0.0 review, not changed):** when reading `localStorage` itself throws, `ProjectProvider` in `src/components/ui.tsx` fails and the shell shows the framework error page. The theme store tolerates blocked storage; the project selector does not.
+23. **Narrow viewports overflow in two places (unchanged by the redesign):** with the demo data, the `/scan` editor at phone width and the `/reports` preview below about 1080px are wider than the viewport and scroll horizontally. The pages are laid out for desktop use.
 
 ---
 
@@ -627,8 +659,8 @@ These are current-source facts to preserve or address intentionally, not claims 
 When dependencies and Chromium are available, this path exercises the main local-only flow without external AI credentials:
 
 1. Start with an isolated `RASQ_DB_URL` and run the app on a known `PORT`.
-2. Open `/api/health` and confirm database initialization.
-3. Open `/demo-target` and confirm the synthetic checkout works.
+2. Open `/api/health` and confirm database initialization and the reported `version`.
+3. Open `/demo-target` and confirm the synthetic checkout works and keeps its light design whichever theme is selected.
 4. In `/scan`, select the demo project and capture `/demo-target` at 1280×800.
 5. Review geometric candidates; manually correct/save only defensible visible controls.
 6. Reopen the saved recording/screen with **Edit saved**, change a label/type, and save. Confirm no duplicate screen appears and unchanged control IDs survive another save.
@@ -640,8 +672,9 @@ When dependencies and Chromium are available, this path exercises the main local
 12. Run Playwright only against the synthetic demo target. Inspect anchor scores, step statuses, messages, and screenshots.
 13. Generate a report and verify it separates generated coverage from observed run evidence; visual-only cases must not increase SRS coverage.
 14. Toggle the AI kill switch and verify provider-backed operations cannot make a model call.
-15. For desktop transport, enroll `desktop-agent` with `RASQ_DESKTOP_DRIVER=mock`, compile a bound sequential workflow, run dry-run and attended confirmation/cancellation, and verify mock outcomes remain `skipped`/simulation rather than real execution. Perform real input only in a separate supervised Windows x64 acceptance environment.
-16. Delete isolated test data/artifacts afterward; do not commit the database or evidence files.
+15. Switch through the four themes in the sidebar, change the custom colours, shuffle the random theme, and reload: the choice must persist without a flash of another theme, and text must stay readable on every page.
+16. For desktop transport, enroll `desktop-agent` with `RASQ_DESKTOP_DRIVER=mock`, compile a bound sequential workflow, run dry-run and attended confirmation/cancellation, and verify mock outcomes remain `skipped`/simulation rather than real execution. Perform real input only in a separate supervised Windows x64 acceptance environment.
+17. Delete isolated test data/artifacts afterward; do not commit the database or evidence files.
 
 This is a manual checklist, not evidence that the path has already passed.
 
@@ -659,6 +692,7 @@ After a task, update this file when any relevant fact changes:
 - **Perception:** coordinate systems, dHash, grouping, candidate limits, AI scaling.
 - **Workflow/runs:** node types, connection rules, statuses, runner lifecycle, URL policy, evidence.
 - **Reports:** fact sources and executed-versus-generated wording.
+- **Appearance:** theme IDs, token set, surface contract, storage format, `.rq-app` scoping, application version.
 - **Verification:** tests/CI added, commands and actual current limitations.
 - **Snapshot:** replace the reviewed commit/date and state what was actually validated.
 
