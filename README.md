@@ -4,12 +4,23 @@ Zero-DOM optical automation: client perception supplies geometry, an optional mu
 
 **Stack:** Next.js (App Router) · Drizzle ORM + libsql/SQLite (`data/rasq.db`) · Playwright · `@xyflow/react` (ReactFlow, the engine behind koolii/react-workflow-editor) · zod.
 
+**Version:** 1.0.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
+
 ## Flow
 1. **Record & Scan** – full-screen recorder (start / pause / stop / cancel), screenshot/video upload, or server-side URL capture. Perception pipeline: luminance → Sobel → density grid → connected components → merged candidate regions → geometric labels + dHash template hash. Frames are grouped per page/window. Saved recording/screen scans can be reopened, edited, and updated in place while preserving unchanged control IDs.
 2. **SRS Documents** – PDF/MD/TXT; exact requirement IDs, acceptance criteria and ambiguity flags.
 3. **Test Scenarios** – traceable (many-to-many) positive/negative/boundary/security/accessibility/performance/resilience cases from an SRS, or positive P2 visual-interaction cases from selected saved scans. Uses P0–P3 priorities and synthetic data; visual-only cases never invent requirement links. CSV/JSON export.
 4. **Workflows & Runs** – convert filtered Test Scenarios directly into downloadable n8n-compatible JSON and a saved runnable workflow, or build on the ReactFlow canvas. Playwright executes visual-anchor actions with live per-node status and step screenshots. The Web Control Plane can also compile a `rasq-desktop.v1` bundle and inspectable RobotJS script for an enrolled attended desktop agent. Dry-run mode validates without executing.
 5. **Reports** – built only from recorded data, with Playwright, real attended RobotJS, dry-run, and mock-simulation outcomes distinguished.
+
+## Appearance
+Glass UI with four themes, chosen in the sidebar or under **AI Models & Policy → Appearance** and remembered per browser:
+
+- **Dark purple** (default) and **Light purple**.
+- **Custom colors** – pick an accent and a background; text, borders and fills are derived from them.
+- **Random high contrast** – a shuffled palette; **Shuffle colors** rolls another.
+
+Text colours are computed rather than hand-picked (`src/lib/theme.ts`): on the surfaces the UI composes, every theme keeps text at WCAG AA (at least 4.5:1) and the random theme at AAA (at least 7:1). When a custom pair leaves too little contrast, the backdrop glow and tints fade and text moves toward pure black or white, so it never becomes unreadable. Status colours (passed, failed, warning, needs-review) use the same hues in every theme and never follow the accent; on a mid-tone custom background, status text fades toward black or white to stay readable. `/demo-target` is deliberately left unthemed because it is a recorded visual test target.
 
 ## AI models
 Every feature (visual scan, document analysis, test scenarios, workflow creation, reports) has its own model selector (Local engine or any configured provider/model). The server-side protocol gateway supports OpenAI-compatible, Anthropic, Gemini, and generic REST/JSON APIs. Generic providers can map methods, headers, request JSON, multimodal content, and response paths through the canonical `rasq-ai.v1` envelope; see [AI API JSON Integration](./AI_API_JSON_INTEGRATION.md).

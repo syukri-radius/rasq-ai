@@ -13,7 +13,7 @@ type WfRow = { id: string; name: string; version: number; nodes: number; provena
 type Step = { id: string; position: number; nodeId: string; nodeName: string; nodeType: string; status: string; message: string; durationMs: number; evidence: Record<string, unknown> };
 type Run = { id: string; mode: string; status: string; error: string | null; summary: Record<string, number>; startedAt: string; finishedAt: string | null; targetUrl: string } & DesktopRunView;
 
-const RING: Record<string, string> = { idle: "border-slate-300", pending: "border-slate-300", running: "border-sky-500 ring-4 ring-sky-200 animate-pulse", passed: "border-emerald-500 bg-emerald-50", failed: "border-rose-500 bg-rose-50", error: "border-rose-600 bg-rose-50", warning: "border-amber-500 bg-amber-50", "needs-review": "border-violet-500 bg-violet-50", skipped: "border-slate-400 bg-slate-100" };
+const RING: Record<string, string> = { idle: "border-line-strong", pending: "border-line-strong", running: "border-info-line", passed: "border-ok-line bg-ok-soft", failed: "border-danger-line bg-danger-soft", error: "border-danger-line bg-danger-soft", warning: "border-warn-line bg-warn-soft", "needs-review": "border-review-line bg-review-soft", skipped: "border-line-strong bg-tint-2" };
 const KIND: Record<string, string> = { [NT.trigger]: "Trigger", [NT.open]: "Open target", [NT.section]: "Test case", [NT.action]: "Action", [NT.assert]: "Assert" };
 
 function RasqNode({ data, selected }: NodeProps) {
@@ -21,12 +21,15 @@ function RasqNode({ data, selected }: NodeProps) {
   const p = d.parameters;
   const sub = d.nodeType === NT.action ? `${p.action}${p.anchorStatus === "unresolved" ? " · no anchor" : ""}` : d.nodeType === NT.assert ? String(p.kind) : d.nodeType === NT.open ? String(p.url ?? "") : "";
   return (
-    <div className={`w-52 rounded-lg border-2 bg-white px-3 py-2 text-xs shadow ${RING[d.status] ?? RING.idle} ${selected ? "outline outline-2 outline-indigo-500" : ""}`}>
+    // An opaque chip carries the status tint, so the label stays readable over the canvas pattern and edges.
+    <div className={`w-52 rounded-lg bg-opaque text-xs text-ink shadow ${d.status === "running" ? "rq-live" : ""} ${selected ? "outline outline-2 outline-focus" : ""}`}>
       <Handle type="target" position={Position.Left} />
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-600">{KIND[d.nodeType] ?? d.nodeType}</div>
-      <div className="truncate text-sm font-semibold" title={d.name}>{d.name}</div>
-      {sub && <div className="truncate text-slate-500">{sub}</div>}
-      {d.status !== "idle" && <div className="mt-1 text-[10px] font-semibold uppercase text-slate-600">{d.status}</div>}
+      <div className={`rounded-lg border-2 px-3 py-2 ${RING[d.status] ?? RING.idle}`}>
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-accent-ink">{KIND[d.nodeType] ?? d.nodeType}</div>
+        <div className="truncate text-sm font-semibold" title={d.name}>{d.name}</div>
+        {sub && <div className="truncate">{sub}</div>}
+        {d.status !== "idle" && <div className="mt-1 text-[10px] font-semibold uppercase">{d.status}</div>}
+      </div>
       <Handle type="source" position={Position.Right} />
     </div>
   );
@@ -193,7 +196,7 @@ function Editor() {
           {wfId && <>
             <input className={`${inputCls} !w-56`} value={name} onChange={(e) => { setName(e.target.value); setDirty(true); }} />
             <Btn variant={dirty ? "success" : "ghost"} onClick={save}><Save size={14} /> Save{dirty ? " *" : ""}</Btn>
-            <a href={`/api/workflows/${wfId}/export`} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-100"><FileJson size={14} /> Export n8n</a>
+            <a href={`/api/workflows/${wfId}/export`} className="inline-flex items-center gap-1 rounded-lg border border-line-strong bg-raised px-3 py-1.5 text-sm text-ink hover:bg-raised-hover"><FileJson size={14} /> Export n8n</a>
             <Btn onClick={() => { const wf = current8n(); if (wf) download(`${name || "workflow"}.n8n.json`, JSON.stringify({ ...wf, name }, null, 2)); }}><Download size={14} /> Export (unsaved)</Btn>
             <Btn variant="danger" onClick={async () => { if (confirm("Delete this workflow and its runs?")) { await api(`/api/workflows/${wfId}`, { method: "DELETE" }); setWfId(""); void loadList(); } }}><Trash2 size={14} /></Btn>
           </>}
@@ -208,16 +211,16 @@ function Editor() {
               <input className={`${inputCls} !w-80`} value={target} onChange={(e) => setTarget(e.target.value)} placeholder="https://… or /demo-target" />
               <Btn variant="success" onClick={() => start("playwright")} disabled={running || !target}><Play size={14} /> Run with Playwright</Btn>
               <Btn onClick={() => start("dry-run")} disabled={running}><FlaskConical size={14} /> Dry run (validate only)</Btn>
-              {run && <span className="ml-auto flex items-center gap-2">Run {run.mode}: <Badge>{run.status}</Badge> {Object.entries(run.summary ?? {}).map(([k, v]) => <Badge key={k}>{`${k}: ${v}`}</Badge>)}</span>}
+              {run && <span className="ml-auto flex flex-wrap items-center gap-2">Run {run.mode}: <Badge>{run.status}</Badge> {Object.entries(run.summary ?? {}).map(([k, v]) => <Badge key={k}>{`${k}: ${v}`}</Badge>)}</span>}
             </div>
             {run?.error && <div className="mt-2 whitespace-pre-wrap"><Notice kind="error">{run.error}</Notice></div>}
-            <p className="mt-2 text-xs text-slate-500">Actions use visual anchors (scaled region + template-hash check). Steps without an anchor are skipped, never guessed. Assertions without an automatable oracle become “needs-review”. Dry runs execute nothing.</p>
+            <p className="mt-2 text-xs text-muted">Actions use visual anchors (scaled region + template-hash check). Steps without an anchor are skipped, never guessed. Assertions without an automatable oracle become “needs-review”. Dry runs execute nothing.</p>
           </Card>
 
           <DesktopRunPanel workflowId={wfId} run={run} onRunCreated={watch} onRefresh={() => { if (run) watch(run.id); }} />
 
           <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
-            <div className="h-[600px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="rq-glass h-[600px] overflow-hidden rounded-xl">
               <ReactFlow nodes={nodes} edges={edges} onNodesChange={(c) => { onNodesChange(c); if (c.some((x) => x.type === "position" || x.type === "remove")) setDirty(true); }} onEdgesChange={(c) => { onEdgesChange(c); if (c.some((x) => x.type === "remove")) setDirty(true); }} onConnect={onConnect} onNodeClick={(_, n) => setSelId(n.id)} onPaneClick={() => setSelId("")} {...flowProps}>
                 <Background gap={18} />
                 <Controls />
@@ -229,11 +232,11 @@ function Editor() {
                 {sel ? (
                   <div className="space-y-2 text-sm">
                     <input className={inputCls} value={(sel.data as { name: string }).name} onChange={(e) => rename(e.target.value)} />
-                    <div className="text-xs text-slate-500">{(sel.data as { nodeType: string }).nodeType}</div>
+                    <div className="text-xs text-muted">{(sel.data as { nodeType: string }).nodeType}</div>
                     <textarea className={`${inputCls} h-48 font-mono text-xs`} value={paramText} onChange={(e) => setParamText(e.target.value)} />
                     <Btn onClick={applyNode}>Apply parameters</Btn>
                     {selStep && (
-                      <div className="rounded-lg border bg-slate-50 p-2 text-xs">
+                      <div className="rounded-lg border bg-tint-1 p-2 text-xs">
                         <div className="mb-1 flex items-center gap-2"><Badge>{selStep.status}</Badge>{selStep.durationMs} ms</div>
                         <p>{selStep.message}</p>
                         {typeof selStep.evidence.shot === "string" && run && (
@@ -243,14 +246,14 @@ function Editor() {
                       </div>
                     )}
                   </div>
-                ) : <p className="text-sm text-slate-500">Select a node to edit its parameters or see its run evidence. Drag handles to connect nodes; press Delete to remove.</p>}
+                ) : <p className="text-sm text-muted">Select a node to edit its parameters or see its run evidence. Drag handles to connect nodes; press Delete to remove.</p>}
               </Card>
               <Card title="Run history">
                 <ul className="max-h-48 space-y-1 overflow-auto text-xs">
                   {runs.map((r) => (
-                    <li key={r.id}><button onClick={() => watch(r.id)} className={`flex w-full items-center justify-between rounded border p-1.5 text-left ${run?.id === r.id ? "border-indigo-400 bg-indigo-50" : ""}`}><span>{new Date(r.startedAt).toLocaleString()} · {r.mode}</span><Badge>{r.status}</Badge></button></li>
+                    <li key={r.id}><button onClick={() => watch(r.id)} className={`flex w-full items-center justify-between rounded border p-1.5 text-left ${run?.id === r.id ? "border-accent-line bg-accent-soft" : ""}`}><span>{new Date(r.startedAt).toLocaleString()} · {r.mode}</span><Badge>{r.status}</Badge></button></li>
                   ))}
-                  {runs.length === 0 && <li className="text-slate-500">No runs yet.</li>}
+                  {runs.length === 0 && <li className="text-muted">No runs yet.</li>}
                 </ul>
               </Card>
             </div>
@@ -260,10 +263,10 @@ function Editor() {
             <Card title="Execution log" className="mt-4">
               <div className="max-h-80 overflow-auto">
                 <table className="w-full text-xs">
-                  <thead className="text-left text-slate-500"><tr><th className="p-1">#</th><th className="p-1">Node</th><th className="p-1">Status</th><th className="p-1">ms</th><th className="p-1">Message</th></tr></thead>
+                  <thead className="text-left text-muted"><tr><th className="p-1">#</th><th className="p-1">Node</th><th className="p-1">Status</th><th className="p-1">ms</th><th className="p-1">Message</th></tr></thead>
                   <tbody>
                     {steps.map((s) => (
-                      <tr key={s.id} className="cursor-pointer border-t align-top hover:bg-slate-50" onClick={() => setSelId(s.nodeId)}>
+                      <tr key={s.id} className="cursor-pointer border-t align-top hover:bg-tint-1" onClick={() => setSelId(s.nodeId)}>
                         <td className="p-1">{s.position + 1}</td><td className="p-1 font-medium">{s.nodeName}</td><td className="p-1"><Badge>{s.status}</Badge></td><td className="p-1">{s.durationMs}</td><td className="p-1">{s.message}</td>
                       </tr>
                     ))}

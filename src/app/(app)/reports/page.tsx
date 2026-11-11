@@ -26,9 +26,9 @@ function Md({ text }: { text: string }) {
         </table>,
       );
     } else if (l.startsWith("# ")) out.push(<h1 key={i} className="mb-2 text-xl font-bold">{l.slice(2)}</h1>);
-    else if (l.startsWith("## ")) out.push(<h2 key={i} className="mb-1 mt-4 text-base font-semibold text-indigo-800">{l.slice(3)}</h2>);
+    else if (l.startsWith("## ")) out.push(<h2 key={i} className="mb-1 mt-4 text-base font-semibold text-accent-ink">{l.slice(3)}</h2>);
     else if (l.startsWith("- ")) out.push(<li key={i} className="ml-5 list-disc text-sm">{l.slice(2).replace(/\*\*/g, "")}</li>);
-    else if (l.trim()) out.push(<p key={i} className="text-sm text-slate-700">{l.replace(/\*\*|_/g, "")}</p>);
+    else if (l.trim()) out.push(<p key={i} className="text-sm text-ink">{l.replace(/\*\*|_/g, "")}</p>);
   }
   return <div>{out}</div>;
 }
@@ -60,16 +60,16 @@ export default function ReportsPage() {
         <Card title="History">
           <ul className="space-y-1 text-sm">
             {list.map((r) => (
-              <li key={r.id} className={`flex items-center justify-between rounded-lg border p-2 ${sel?.id === r.id ? "border-indigo-400 bg-indigo-50" : ""}`}>
-                <button className="text-left" onClick={() => setSel(r)}><div className="font-medium">{r.title}</div><div className="text-xs text-slate-500">{r.provenance}</div></button>
+              <li key={r.id} className={`flex items-center justify-between rounded-lg border p-2 ${sel?.id === r.id ? "border-accent-line bg-accent-soft" : ""}`}>
+                <button className="text-left" onClick={() => setSel(r)}><div className="font-medium">{r.title}</div><div className="text-xs text-muted">{r.provenance}</div></button>
                 <Btn variant="danger" className="!px-1.5 !py-0.5" onClick={async () => { await api(`/api/reports?id=${r.id}`, { method: "DELETE" }); void load(); }}><Trash2 size={12} /></Btn>
               </li>
             ))}
-            {list.length === 0 && <li className="text-slate-500">No reports yet.</li>}
+            {list.length === 0 && <li className="text-muted">No reports yet.</li>}
           </ul>
         </Card>
-        <Card title="Preview" actions={sel && <a href={`/api/reports/${sel.id}`} className="inline-flex items-center gap-1 rounded-lg border px-3 py-1 text-sm hover:bg-slate-100"><Download size={14} /> Markdown</a>}>
-          {sel ? <Md text={sel.markdown} /> : <p className="py-10 text-center text-sm text-slate-500">Generate a report to preview it here.</p>}
+        <Card title="Preview" actions={sel && <a href={`/api/reports/${sel.id}`} className="inline-flex items-center gap-1 rounded-lg border border-line-strong bg-raised px-3 py-1 text-sm text-ink hover:bg-raised-hover"><Download size={14} /> Markdown</a>}>
+          {sel ? <Md text={sel.markdown} /> : <p className="py-10 text-center text-sm text-muted">Generate a report to preview it here.</p>}
         </Card>
       </div>
     </>

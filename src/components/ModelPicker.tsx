@@ -19,11 +19,11 @@ export default function ModelPicker({ task, onChange }: { task: Task; onChange?:
   const route = s?.routes.find((r) => r.task === task);
   const value = route?.providerId ? `${route.providerId}::${route.model}` : "local";
   useEffect(() => onChange?.(!route?.providerId || s?.aiMode !== "ai"), [route?.providerId, s?.aiMode, onChange]);
-  if (!s) return <div className="h-9 w-56 animate-pulse rounded-lg bg-slate-200" />;
+  if (!s) return <div className="h-9 w-56 animate-pulse rounded-lg bg-tint-2" />;
   const sel = s.providers.find((p) => p.id === route?.providerId);
   return (
     <div className="flex flex-col gap-1">
-      <label className="flex items-center gap-2 text-xs font-medium text-slate-500">
+      <label className="flex items-center gap-2 text-xs font-medium text-muted">
         {TASK_LABELS[task]} model
         <select
           value={value}
@@ -32,7 +32,7 @@ export default function ModelPicker({ task, onChange }: { task: Task; onChange?:
             await api("/api/settings", { method: "PUT", json: { route: { task, providerId, model } } });
             await load();
           }}
-          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-800"
+          className="rounded-lg border border-line-strong bg-field px-2 py-1.5 text-sm text-ink"
         >
           <option value="local">Local engine (no AI, no data sent)</option>
           {s.providers
@@ -48,9 +48,9 @@ export default function ModelPicker({ task, onChange }: { task: Task; onChange?:
             ))}
         </select>
       </label>
-      {s.aiMode !== "ai" && <span className="text-xs text-amber-700">AI kill switch is ON — <Link className="underline" href="/settings">Settings</Link></span>}
-      {sel && !sel.keyConfigured && <span className="text-xs text-rose-700">Server env {sel.apiKeyEnv} is not set; requests will fail.</span>}
-      {sel && sel.keyConfigured && s.aiMode === "ai" && <span className="text-xs text-indigo-700">Data for this task will be sent to {sel.name}.</span>}
+      {s.aiMode !== "ai" && <span className="text-xs text-warn-ink">AI kill switch is ON — <Link className="underline" href="/settings">Settings</Link></span>}
+      {sel && !sel.keyConfigured && <span className="text-xs text-danger-ink">Server env {sel.apiKeyEnv} is not set; requests will fail.</span>}
+      {sel && sel.keyConfigured && s.aiMode === "ai" && <span className="text-xs text-accent-ink">Data for this task will be sent to {sel.name}.</span>}
     </div>
   );
 }
