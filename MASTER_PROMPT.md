@@ -135,6 +135,14 @@ You are a senior full-stack engineer, visual-test-automation specialist, and app
 3. Preserve requirement coverage, ambiguity, provenance, and evidence statements in Markdown/CSV/JSON outputs.
 4. Escape or serialize export fields using the existing format-aware approach; do not inject invented narrative.
 
+#### UI and appearance changes
+
+1. Read **Appearance and themes** and known constraints 21–23 in `CONTEXT_MEMORY.md`, then `src/components/ui.tsx`, `src/components/Shell.tsx`, `src/app/globals.css`, and the pages being changed. Open `src/lib/theme.ts` only when a token or theme changes. A change that affects presentation alone needs no wider survey; when it also changes data or behavior, trace that path as section 1 requires.
+2. Build on the shared primitives. New application pages go under `src/app/(app)/` so they receive the themed shell, and sidebar links are the `NAV` list in `Shell.tsx`.
+3. Take every color from the theme token utilities. Do not add fixed palette classes, color opacity modifiers, `opacity` on text, or one `rq-glass` panel inside another, and keep `text-muted`/`text-faint` out of badges, notices, and status-tinted rows. Add a new token to `theme.ts` and `globals.css` together and keep `tests/theme.test.ts` passing.
+4. Leave `/demo-target` visually unchanged and keep every theme rule scoped to `.rq-app` or `html:has(.rq-app)`: saved locator hashes and run screenshots are compared with that page's pixels. After a change to the stylesheet, a layout, or shared markup, confirm that its screenshots are byte-identical to those of the previous build.
+5. Check the changed screens in a real browser in all four themes and at phone width, and show screenshots in the report. Static checks cannot prove contrast, overflow, or the absence of a wrong-theme flash. If Playwright's browser download is blocked, follow **Browser checks when Playwright's download is blocked** in `CONTEXT_MEMORY.md`.
+
 ### 5. Security posture: improve, do not overclaim
 
 The current application has no authentication/authorization layer and uses local files, SQLite/libsql, and in-process background runs. Treat it as a single-operator development application unless the current source proves otherwise.
@@ -161,6 +169,8 @@ npx playwright install chromium
 # Only after an intentional schema change
 npx drizzle-kit generate
 ```
+
+If the browser download is blocked, as in a sandbox that reaches only the npm registry, follow **Browser checks when Playwright's download is blocked** in `CONTEXT_MEMORY.md` and name that stand-in browser in your report.
 
 The repository includes focused Node tests through `npm test`; the isolated `desktop-agent/` package has its own typecheck/build/test scripts. Run the relevant suites for changed behavior and add focused tests where practical. Perform targeted smoke tests using `/demo-target`, the desktop mock driver, or a supervised synthetic desktop target as appropriate. Use an isolated database and avoid real provider calls or real OS input unless explicitly authorized and configured. Never run uncontrolled desktop-input tests in shared CI.
 
@@ -201,5 +211,17 @@ Desired behavior:
 Files already identified (optional):
 Must remain compatible with:
 Validation expected:
+Out of scope:
+```
+
+## In-repository short form
+
+An agent that works inside a checkout of this repository can read this file itself, so the whole request can be:
+
+```text
+Read MASTER_PROMPT.md and CONTEXT_MEMORY.md in the repository root and follow them.
+Read only what the task and the matching playbook in section 4 point to; do not survey the rest of the repository.
+
+Task:
 Out of scope:
 ```

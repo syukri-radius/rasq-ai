@@ -9,10 +9,10 @@ Point-in-time repository handoff for AI agents and maintainers. Read this with [
 | Repository | `syukri-radius/rasq-ai` |
 | Product | **RASQ-Ai — trustworthy visual test automation** |
 | Application version | `1.0.0` for the web application; `desktop-agent/` is versioned separately at `0.1.0` |
-| Source snapshot reviewed | `26985f028e1c4617acf89e4ef9a67ffa98112335` plus the 1.0.0 glass-theme change documented here. Everything outside the UI layer was last reviewed at `8fb19db2143c7ec2ce86cd84d5cd9aaf7a3640a8` plus the attended RobotJS Desktop Agent implementation |
-| Memory generated / updated | 2026-11-11 for appearance and version; 2026-11-09 for everything else |
+| Source snapshot reviewed | `30fcac12bb65ef7f7e1e9b9045979f46c328ebeb` for the UI layer: the 1.0.0 glass-theme change merged onto `26985f028e1c4617acf89e4ef9a67ffa98112335`. Everything outside the UI layer was last reviewed at `8fb19db2143c7ec2ce86cd84d5cd9aaf7a3640a8` plus the attended RobotJS Desktop Agent implementation |
+| Memory generated / updated | 2026-11-11 for appearance, version and the browser steps for blocked downloads; 2026-11-09 for everything else |
 | Review method | 2026-11-11: source review of the UI layer plus web typecheck, lint, unit tests, production build, and scripted Chromium checks of the themed UI. 2026-11-09: static source review plus typecheck, lint, production build, compiler/agent unit tests, fresh/upgrade migrations, and real HTTP integration with a headless mock desktop agent |
-| Runtime validation at update | **2026-11-11 (themes, version):** web typecheck, 30 web unit tests and the production build passed; lint retains the same eight unused-disable warnings. Chromium 153 with software rendering drove the production build. A rendered-pixel audit compared each visible text run with the pixels behind it across 15 UI states (about 2,300 text runs per theme at 1440×900): the lowest text contrast was 5.70:1 in dark purple, 5.48:1 in light purple, 5.48:1 to 6.42:1 in three custom palettes, and 7.50:1 or more in four random palettes (seeds 1, 2, 3 and 5). Dark purple, light purple and one random palette gave the same minimums at 390×844. Six of these twelve runs were repeated on the final build; the other six ran on an earlier build of the same day that differed only in layout classes and one sentence of interface copy. Theme selection, persistence, reload without a frame of another theme, cross-tab sync, keyboard use, refused storage writes and corrupt-storage fallback were exercised through the real UI. `/demo-target` screenshots were byte-identical to the previous build at 1280×800 and 1440×900, and the content box of `main` had the same position and width as in the previous build at eleven viewport widths from 800px to 2560px. Horizontal overflow at 390, 768, 1024 and 1440px matched the previous build, except that the run-summary badges on `/workflows` now wrap instead of overflowing. URL capture returned a byte-identical screenshot, and a Playwright run of a generated 98-step workflow produced the same status and message for every step as the previous build, but only through a local browser-launcher shim, because Playwright's own browser download was unavailable. Not validated: Firefox, Safari, real devices and external AI providers; `desktop-agent/` was neither changed nor re-tested. **2026-11-09 (desktop agent):** Web/agent typechecks and agent build passed; web production build and mock HTTP dry-run/attended/cancellation paths passed; lint retains eight existing unused-disable warnings. No real OS input, packaged agent, external AI provider, or Chromium execution was used. |
+| Runtime validation at update | **2026-11-11 (themes, version):** web typecheck, 30 web unit tests and the production build passed; lint retains the same eight unused-disable warnings. Chromium 153 with software rendering drove the production build. A rendered-pixel audit compared each visible text run with the pixels behind it across 15 UI states (about 2,300 text runs per theme at 1440×900): the lowest text contrast was 5.70:1 in dark purple, 5.48:1 in light purple, 5.48:1 to 6.42:1 in three custom palettes, and 7.50:1 or more in four random palettes (seeds 1, 2, 3 and 5). Dark purple, light purple and one random palette gave the same minimums at 390×844. Six of these twelve runs were repeated on the final build; the other six ran on an earlier build of the same day that differed only in layout classes and one sentence of interface copy. Theme selection, persistence, reload without a frame of another theme, cross-tab sync, keyboard use, refused storage writes and corrupt-storage fallback were exercised through the real UI. `/demo-target` screenshots were byte-identical to the previous build at 1280×800 and 1440×900, and the content box of `main` had the same position and width as in the previous build at eleven viewport widths from 800px to 2560px. Horizontal overflow at 390, 768, 1024 and 1440px matched the previous build, except that the run-summary badges on `/workflows` now wrap instead of overflowing. URL capture returned a byte-identical screenshot, and a Playwright run of a generated 98-step workflow produced the same status and message for every step as the previous build, but only through a local browser-launcher shim, because Playwright's own browser download was unavailable. Not validated: Firefox, Safari, real devices and external AI providers; `desktop-agent/` was neither changed nor re-tested. **2026-11-11 (browser steps):** starting from an empty sandbox, the two steps under **Browser checks when Playwright's download is blocked** produced a working Chromium 153. Through its launcher, URL capture of `/demo-target` and a two-node Playwright run of it passed, and `/settings` rendered in all four themes at 1440×900 and in light purple at 390×844. No application code changed. **2026-11-09 (desktop agent):** Web/agent typechecks and agent build passed; web production build and mock HTTP dry-run/attended/cancellation paths passed; lint retains eight existing unused-disable warnings. No real OS input, packaged agent, external AI provider, or Chromium execution was used. |
 | License file | `Commercial Standard License`, naming PT Radius Data Solusi; see `LICENSE` for its usage/redistribution restrictions and remaining template language |
 
 This document describes the snapshot above. Later commits may invalidate details. Statements in **Known constraints** are observations, not automatically approved feature work.
@@ -184,6 +184,42 @@ npx playwright install chromium
 npx playwright install chromium --with-deps
 ```
 
+### Browser checks when Playwright's download is blocked
+
+Some sandboxes reach the npm registry but not Playwright's download host, and lack Chromium's system libraries. There `npx playwright install chromium` ends with `Failed to download Chrome for Testing`, and the app reports "Chromium for Playwright is not available on this server". The npm package `@sparticuz/chromium` bundles a Chromium build with the libraries it needs and serves as a stand-in **for verification only**. The two steps below were run from an empty sandbox on 2026-11-11 (Debian 12 x64, Node 22, Playwright 1.65.0).
+
+**1. Unpack the browser outside the repository.**
+
+```bash
+mkdir -p /tmp/rq-browser && cd /tmp/rq-browser && npm init -y && npm install @sparticuz/chromium@153.0.0
+AWS_EXECUTION_ENV=AWS_Lambda_nodejs22.x node --input-type=module \
+  -e 'import c from "@sparticuz/chromium"; console.log(await c.executablePath())'
+```
+
+This writes `/tmp/chromium` with its SwiftShader libraries, `/tmp/al2023/lib` and `/tmp/fonts`. The variable is what makes the package unpack the system libraries. If `/tmp/chromium` already exists without `/tmp/al2023/lib`, delete it and run the command again, because an existing binary skips the unpacking.
+
+**2. Put a launcher where Playwright expects its headless browser.** The path is the one named in the "Executable doesn't exist at …" error; this is the path for Playwright 1.65.0.
+
+```bash
+r=~/.cache/ms-playwright/chromium_headless_shell-1254
+mkdir -p "$r/chrome-headless-shell-linux64"
+printf '%s\n' '#!/bin/bash' \
+  'export LD_LIBRARY_PATH=/tmp/al2023/lib FONTCONFIG_PATH=/tmp/fonts' \
+  'exec /tmp/chromium "$@" --use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader' \
+  > "$r/chrome-headless-shell-linux64/chrome-headless-shell"
+chmod +x "$r/chrome-headless-shell-linux64/chrome-headless-shell" && touch "$r/INSTALLATION_COMPLETE"
+```
+
+Without the `INSTALLATION_COMPLETE` marker, a later `npx playwright install` attempt deletes the launcher.
+
+After that, Playwright's default headless launch works unchanged for the app's URL capture and runs (`src/lib/runner.ts`) and for scripts. A script kept outside the repository can load the repository's Playwright with `createRequire("<repo>/package.json")("playwright")` and call `chromium.launch()`.
+
+- **Different browser:** this is Chromium 153, while Playwright 1.65.0 pins Chrome for Testing 158. It renders in software and has one font family (Open Sans), so line breaks differ from a user's machine, monospace text is drawn in Open Sans, and emoji, CJK and Arabic text are not drawn at all. Name it in the report; it does not replace a check in a normally installed browser.
+- **Pixel comparisons:** compare screenshots only when both sides come from this same setup, viewport and scale factor. With the three SwiftShader arguments, 40 of 40 captures of `/demo-target` were byte-identical; with only the app's own launch arguments, 2 of 48 differed.
+- **Reference for `/demo-target`:** on the production build of `30fcac1`, a viewport PNG at scale factor 1 taken 900 ms after `networkidle` has sha256 `5e53240a2235b043a84913015b6798100774350741e012e0f33b385985251a0f` at 1440×900 and `2dcafaab11b12c22ede3e020c7e9421f2868cd1e1a07c95c59602aaced6728a6` at 1280×800; `POST /api/capture` returns the same bytes. If a capture differs, capture the base commit in the same sandbox before concluding that the page changed.
+- **Themes in scripts:** write the preference to `localStorage` before the page loads, for example `context.addInitScript(() => localStorage.setItem("rasq.theme", '{"id":"light-purple"}'))`. Add `custom` or `seed` for the custom and random themes; the format is under **Appearance and themes**.
+- **Housekeeping:** none of this belongs in the repository or is needed where `npx playwright install chromium` works. `/tmp` and `~/.cache` can be emptied between sessions; repeat both steps then.
+
 ### Available scripts
 
 | Command | Actual script |
@@ -200,6 +236,8 @@ npx playwright install chromium --with-deps
 | `cd desktop-agent && npm run package:win` | Windows-only unsigned development ZIP staging; not a signed installer |
 
 Focused web and agent tests are checked in; no CI configuration was added. `npm test` picks up every `tests/*.test.ts`, including the theme-engine and version tests.
+
+`npm run build` rewrites the tracked `next-env.d.ts`, because the committed copy points at the development type folder (`.next/dev/types`) and a production build points it at `.next/types`. Restore it with `git checkout -- next-env.d.ts` before committing.
 
 ### Environment and storage
 
