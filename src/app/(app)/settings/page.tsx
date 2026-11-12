@@ -6,6 +6,7 @@ import { api, Badge, Btn, Card, inputCls, Notice, PageHeader } from "@/component
 import ThemePicker from "@/components/ThemePicker";
 import { TASKS, TASK_LABELS } from "@/lib/types";
 import { AI_PROTOCOL_LABELS, DEFAULT_JSON_PROVIDER_CONFIG, type AiProtocol, type ProviderConfig } from "@/lib/aiContract";
+import { OPENCODE_GO } from "@/lib/opencodeGo";
 
 type Provider = { id: string; name: string; kind: AiProtocol; baseUrl: string; apiKeyEnv: string; models: string[]; enabled: boolean; keyConfigured: boolean; config: ProviderConfig };
 type Policy = { id: string; name: string; priority: number; content: string; enabled: boolean };
@@ -28,7 +29,7 @@ export default function SettingsPage() {
   if (!s) return <div className="h-40 animate-pulse rounded-xl bg-tint-2" />;
   return (
     <>
-      <PageHeader title="AI Models & Policy" subtitle="Route each feature through OpenAI, Anthropic, Gemini, or a declarative REST/JSON integration. Credentials are never stored: providers reference the NAME of a server-side environment variable." />
+      <PageHeader title="AI Models & Policy" subtitle="Route each feature through an OpenAI-compatible provider (including OpenCode Go), Anthropic, Gemini, or a declarative REST/JSON integration. Credentials are never stored: providers reference the NAME of a server-side environment variable." />
       {msg && <div className="mb-3"><Notice kind={msg.kind}>{msg.text}</Notice></div>}
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="AI data-sharing switch">
@@ -75,6 +76,10 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </div>
+        {!s.providers.some((p) => p.name === OPENCODE_GO.name) && <div className="mt-4 border-t pt-4 text-sm">
+          <Btn onClick={() => setNp({ ...OPENCODE_GO, models: OPENCODE_GO.models.join(", "), config: defaultConfigText() })}>Use OpenCode Go preset</Btn>
+          <span className="ml-2 text-muted">Fills the form for Go chat-completions models; review and add the provider, then select a task route. Requires a Go subscription and OPENCODE_API_KEY on the server. Image support is model-dependent; use Local for visual scans unless verified.</span>
+        </div>}
         <form className="mt-4 grid gap-2 border-t pt-4 md:grid-cols-6" onSubmit={(e) => { e.preventDefault(); void run(async () => { await api("/api/providers", { json: { ...np, models: np.models.split(","), config: np.kind === "json" ? JSON.parse(np.config) : {} } }); setNp({ name: "", kind: "openai", baseUrl: "", apiKeyEnv: "", models: "", config: defaultConfigText() }); }, "Provider added"); }}>
           <input required className={inputCls} placeholder="Name" value={np.name} onChange={(e) => setNp({ ...np, name: e.target.value })} />
           <select className={inputCls} value={np.kind} onChange={(e) => setNp({ ...np, kind: e.target.value as AiProtocol })}>{Object.entries(AI_PROTOCOL_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>

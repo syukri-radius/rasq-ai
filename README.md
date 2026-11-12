@@ -25,7 +25,9 @@ Text colours are computed rather than hand-picked (`src/lib/theme.ts`): on the s
 ## AI models
 Every feature (visual scan, document analysis, test scenarios, workflow creation, reports) has its own model selector (Local engine or any configured provider/model). The server-side protocol gateway supports OpenAI-compatible, Anthropic, Gemini, and generic REST/JSON APIs. Generic providers can map methods, headers, request JSON, multimodal content, and response paths through the canonical `rasq-ai.v1` envelope; see [AI API JSON Integration](./AI_API_JSON_INTEGRATION.md).
 
-Providers store only the *name* of a server env var (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, …). Secrets/PANs/emails are redacted before supported text calls; documents and images are wrapped as untrusted data. Images are not pixel-redacted.
+OpenCode Go is seeded on fresh databases as an optional OpenAI-compatible provider. On existing databases, use the **OpenCode Go preset** on `/settings` and add it. Set `OPENCODE_API_KEY` on the server, then explicitly choose a Go model per task; the Local engine remains the default. The preset includes only [Go chat-completions models](https://opencode.ai/docs/console/go/#endpoints), not its Responses/Anthropic/Gemini models. Go is intended for coding-agent traffic; verify your usage and each model's image/JSON support before using it for visual scans. No live Go account has been validated here.
+
+Providers store only the *name* of a server env var (`OPENAI_API_KEY`, `OPENCODE_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, …). Secrets/PANs/emails are redacted before supported text calls; documents and images are wrapped as untrusted data. Images are not pixel-redacted.
 
 ## Database
 `drizzle/` holds generated migrations (`npx drizzle-kit generate`); they are applied and seeded automatically on first request (`src/db/index.ts`, `src/db/seed.ts`). Override the location with `RASQ_DB_URL` (e.g. `file:./data/rasq.db` or a Turso URL).
