@@ -3,6 +3,7 @@ import type { Db } from "./index";
 import { aiProviders, modelRoutes, policies, projects, requirementDocs, requirements, settings } from "./schema";
 import { parseRequirements } from "@/lib/srs";
 import { TASKS } from "@/lib/types";
+import { OPENCODE_GO } from "@/lib/opencodeGo";
 
 export const SAMPLE_SRS = `Checkout & Account SRS v1.0 (synthetic sample document)
 
@@ -37,6 +38,7 @@ export async function seed(db: Db) {
       { name: "Anthropic", kind: "anthropic", baseUrl: "https://api.anthropic.com", apiKeyEnv: "ANTHROPIC_API_KEY", models: ["claude-sonnet-4-5", "claude-opus-4-1", "claude-3-5-haiku-latest"] },
       { name: "Google Gemini", kind: "gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta", apiKeyEnv: "GEMINI_API_KEY", models: ["gemini-2.5-flash", "gemini-2.5-pro"] },
       { name: "OpenRouter", kind: "openai", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnv: "OPENROUTER_API_KEY", models: ["openai/gpt-4o", "anthropic/claude-sonnet-4.5", "google/gemini-2.5-flash"] },
+      OPENCODE_GO,
       { name: "Ollama (local)", kind: "openai", baseUrl: "http://127.0.0.1:11434/v1", apiKeyEnv: "", models: ["llava", "llama3.2-vision", "qwen2.5vl"] },
     ])
     .returning();
