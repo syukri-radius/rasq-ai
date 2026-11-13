@@ -1,4 +1,14 @@
+import { randomUUID } from "node:crypto";
 import type { ProviderConfig, StandardAiRequest, StandardContent, StandardImage } from "./aiContract";
+
+// RASQ-Ai has no conversation ID. Keep one opaque Go routing session per server
+// process, rather than putting a credential or operator data in the header.
+let goSessionId: string | undefined;
+
+function isOpenCodeGo(url: string): boolean {
+  const endpoint = new URL(url);
+  return endpoint.protocol === "https:" && endpoint.hostname === "opencode.ai" && endpoint.pathname.startsWith("/inference/go/");
+}
 
 export type ProtocolProvider = {
   name: string;
@@ -210,7 +220,16 @@ export async function callProtocolProvider(provider: ProtocolProvider, model: st
     throw new Error(`Unsupported AI protocol "${provider.kind}".`);
   }
 
-  const json = await execute(provider, renderEndpoint(url, model), method, headers, body, config);
+  const endpoint = renderEndpoint(url, model);
+  if (isOpenCodeGo(endpoint)) {
+    // Override any differently cased custom copies; HTTP header names are case-insensitive.
+    for (const name of Object.keys(headers)) {
+      if (["user-agent", "x-opencode-session"].includes(name.toLowerCase())) delete headers[name];
+    }
+    headers["user-agent"] = "rasq-ai/1.0";
+    headers["x-opencode-session"] = goSessionId ?? (goSessionId = `ses_${randomUUID()}`);
+  }
+  const json = await execute(provider, endpoint, method, headers, body, config);
   if (provider.kind === "json") return extractText(json, config.responsePath);
   if (provider.kind === "anthropic") return extractText(json, "content");
   if (provider.kind === "gemini") return extractText(json, "candidates[0].content.parts");
