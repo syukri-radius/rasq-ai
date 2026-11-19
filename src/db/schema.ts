@@ -185,6 +185,26 @@ export const testTraceability = sqliteTable(
   (t) => [primaryKey({ columns: [t.testCaseId, t.requirementId] })],
 );
 
+/** Restricted JSON REST load plans; no uploaded JMX or credentials are stored. */
+export const performancePlans = sqliteTable("performance_plans", {
+  id: pk(),
+  projectId: text("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  caseId: text("case_id").references(() => testCases.id, { onDelete: "set null" }),
+  config: text("config", { mode: "json" }).$type<import("@/lib/performance").PerformancePlan>().notNull(),
+  createdAt: createdAt(),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+});
+
+export const performanceRuns = sqliteTable("performance_runs", {
+  id: pk(),
+  planId: text("plan_id").notNull().references(() => performancePlans.id, { onDelete: "cascade" }),
+  status: text("status").notNull().default("running"),
+  summary: text("summary", { mode: "json" }).$type<import("@/lib/performance").PerformanceSummary | null>(),
+  error: text("error").notNull().default(""),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull().$defaultFn(() => new Date()),
+  completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+});
+
 export const workflows = sqliteTable("workflows", {
   id: pk(),
   projectId: text("project_id")

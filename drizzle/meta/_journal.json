@@ -22,6 +22,13 @@
       "when": 1794196523231,
       "tag": "0002_desktop_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1794517200000,
+      "tag": "0003_performance_plans",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ const NAV = [
   { href: "/scan", label: "Record & Scan", icon: ScanEye },
   { href: "/requirements", label: "SRS Documents", icon: FileText },
   { href: "/tests", label: "Test Scenarios", icon: FlaskConical },
+  { href: "/performance", label: "REST Performance", icon: Activity },
   { href: "/workflows", label: "Workflows & Runs", icon: Workflow },
   { href: "/reports", label: "Reports", icon: ScrollText },
   { href: "/settings", label: "AI Models & Policy", icon: Settings },
