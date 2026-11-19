@@ -1,6 +1,6 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
-import { controls, projects, reports, runs, screens, workflows } from "@/db/schema";
+import { controls, performancePlans, performanceRuns, projects, reports, runs, screens, workflows } from "@/db/schema";
 import { buildSystem, callModel, errMsg, parseJson, provenanceOf, resolveRoute, untrusted } from "@/lib/ai";
 import { body, fail, ok } from "@/lib/api";
 import { loadCases } from "@/lib/cases";
@@ -18,6 +18,7 @@ export async function GET(req: Request) {
 
 const tally = (xs: string[]) => xs.reduce<Record<string, number>>((m, x) => ((m[x] = (m[x] ?? 0) + 1), m), {});
 const table = (o: Record<string, number>) => (Object.keys(o).length ? Object.entries(o).map(([k, v]) => `| ${k} | ${v} |`).join("\n") : "| (none) | 0 |");
+const cell = (s: string) => s.replace(/\|/g, "/").replace(/[\r\n]+/g, " ");
 
 export async function POST(req: Request) {
   try {
@@ -30,6 +31,8 @@ export async function POST(req: Request) {
     const ctl = scr.length ? await db.select().from(controls).where(inArray(controls.screenId, scr.map((s) => s.id))) : [];
     const wfs = await db.select().from(workflows).where(eq(workflows.projectId, proj.id));
     const rs = wfs.length ? await db.select().from(runs).where(inArray(runs.workflowId, wfs.map((w) => w.id))).orderBy(desc(runs.startedAt)) : [];
+    const perfPlans = await db.select().from(performancePlans).where(eq(performancePlans.projectId, proj.id));
+    const perfRuns = perfPlans.length ? await db.select().from(performanceRuns).where(inArray(performanceRuns.planId, perfPlans.map((p) => p.id))).orderBy(desc(performanceRuns.startedAt)) : [];
 
     const covered = new Set(cases.flatMap((c) => c.requirementKeys));
     const uncovered = reqs.filter((r) => !covered.has(r.reqKey)).map((r) => r.reqKey);
@@ -53,13 +56,15 @@ export async function POST(req: Request) {
       executedRuns: rs.filter((r) => (r.executor === "playwright" && r.mode === "playwright") || (r.executor === "robotjs-desktop" && r.mode === "attended" && r.desktopDriver === "robotjs")).length,
       simulatedDesktopRuns: rs.filter((r) => r.executor === "robotjs-desktop" && r.desktopDriver === "mock").length,
       dryRuns: rs.filter((r) => r.mode === "dry-run").length,
+      jmeterRuns: perfRuns.filter((r) => r.summary && r.status !== "running").length,
+      latestJmeterStatuses: perfRuns.slice(0, 5).map((r) => ({ status: r.status, sampleCount: r.summary?.count ?? 0 })),
       latestRunStatuses: rs.slice(0, 5).map((r) => ({ executor: r.executor, driver: r.desktopDriver || null, mode: r.mode, status: r.status, summary: r.summary })),
     };
 
     const route = await resolveRoute(db, "report_generation");
     let ai: { executiveSummary: string; risks: string[]; recommendations: string[] } | null = null;
     if (!route.local) {
-      const system = await buildSystem(db, `TASK: report generation. Output schema: {"executiveSummary":string,"risks":string[],"recommendations":string[]}. Use ONLY the supplied facts. If executedRuns is 0 state clearly that no test has been executed. Do not claim pass rates that are not in the data.`);
+      const system = await buildSystem(db, `TASK: report generation. Output schema: {"executiveSummary":string,"risks":string[],"recommendations":string[]}. Use ONLY the supplied facts. executedRuns counts only Playwright/real RobotJS; jmeterRuns counts recorded HTTP load tests separately. If both are 0 state clearly that no test has been executed. Never conflate JMeter samples with browser/desktop outcomes. Do not claim pass rates that are not in the data.`);
       ai = AiReportSchema.parse(parseJson(await callModel(route, { system, user: untrusted("project statistics", JSON.stringify(stats)) })));
     }
     const prov = provenanceOf(route);
@@ -69,7 +74,7 @@ export async function POST(req: Request) {
       "",
       "## Evidence statement",
       stats.executedRuns === 0
-        ? "**No Playwright or real RobotJS desktop execution has been recorded for this project.** All counts below describe generated artifacts or simulations, not observed application test results."
+        ? `**No Playwright or real RobotJS desktop execution has been recorded for this project.** ${stats.jmeterRuns ? `${stats.jmeterRuns} JMeter run(s) contain observed HTTP samples, shown separately below.` : "Generated artifacts and simulations are not observed application test results."}`
         : `${stats.executedRuns} real execution run(s) are recorded: ${stats.playwrightRuns} Playwright and ${stats.desktopAttendedRuns} attended RobotJS desktop. Only recorded run data is reported; nothing is inferred.`,
       ...(stats.simulatedDesktopRuns ? [`${stats.simulatedDesktopRuns} mock desktop run(s) are simulations and are not counted as real execution evidence.`] : []),
       ...(ai ? ["", `## Executive summary (AI-authored by ${prov} from the statistics in this report)`, ai.executiveSummary] : []),
@@ -102,7 +107,12 @@ export async function POST(req: Request) {
       table(stats.controlsByType),
       "",
       "## Execution",
-      rs.length ? "| Run | Executor | Driver | Mode | Status | Summary |\n|---|---|---|---|---|---|\n" + rs.slice(0, 10).map((r) => `| ${r.startedAt.toISOString()} | ${r.executor} | ${r.desktopDriver || "—"} | ${r.mode} | ${r.status} | ${Object.entries(r.summary).map(([k, v]) => `${k}:${v}`).join(" ")} |`).join("\n") : "No runs recorded.",
+      rs.length ? "| Run | Executor | Driver | Mode | Status | Summary |\n|---|---|---|---|---|---|\n" + rs.slice(0, 10).map((r) => `| ${r.startedAt.toISOString()} | ${r.executor} | ${r.desktopDriver || "—"} | ${r.mode} | ${r.status} | ${Object.entries(r.summary).map(([k, v]) => `${k}:${v}`).join(" ")} |`).join("\n") : "No Playwright or desktop runs recorded.",
+      "",
+      "## JSON REST load testing (JMeter CLI)",
+      perfRuns.length ? "| Started | Plan | Status | Samples | p95 ms | Errors | Throughput req/s |\n|---|---|---|---:|---:|---:|---:|\n" + perfRuns.slice(0, 10).map((r) => `| ${r.startedAt.toISOString()} | ${cell(perfPlans.find((p) => p.id === r.planId)?.config.name ?? "Deleted plan")} | ${r.status} | ${r.summary?.count ?? "—"} | ${r.summary?.p95Ms ?? "—"} | ${r.summary ? `${r.summary.errors} (${r.summary.errorPercent.toFixed(2)}%)` : "—"} | ${r.summary?.throughputRps.toFixed(2) ?? "—"} |`).join("\n") : "No JMeter runs recorded; saved plans are not execution evidence.",
+      ...perfRuns.slice(0, 10).flatMap((r) => r.summary ? [`Run ${r.id}: ${r.summary.decisions.map((d) => `${d.metric} ${d.status} — ${cell(d.message)}`).join("; ")}. ${r.summary.notes.map((n) => `Needs review: ${cell(n)}`).join(" ")}`] : [`Run ${r.id}: ${r.status} (${cell(r.error || "no observed samples")}).`]),
+      "Lab HTTP samples only. Implicit defaults are p95 ≤ 1,000 ms and error rate ≤ 1%; missing throughput/ambiguous thresholds are needs-review. Confidence bounds assume independent samples and do not substitute for field evidence.",
       ...(ai ? ["", "## Risks (AI-authored)", ...ai.risks.map((x) => `- ${x}`), "", "## Recommendations (AI-authored)", ...ai.recommendations.map((x) => `- ${x}`)] : []),
       "",
       "---",

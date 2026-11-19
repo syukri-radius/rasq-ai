@@ -32,6 +32,11 @@ Providers store only the *name* of a server env var (`OPENAI_API_KEY`, `OPENCODE
 ## Database
 `drizzle/` holds generated migrations (`npx drizzle-kit generate`); they are applied and seeded automatically on first request (`src/db/index.ts`, `src/db/seed.ts`). Override the location with `RASQ_DB_URL` (e.g. `file:./data/rasq.db` or a Turso URL).
 
+## JSON REST performance testing (JMeter CLI)
+On `/performance`, select a Test Scenario, choose applicable requirement IDs across one or more SRS documents, and create/update a restricted JSON REST load plan. Set `RASQ_JMETER_ALLOWED_ORIGINS` to an explicit comma-separated list of **exact origins** (for example `http://127.0.0.1:8123`) and install `jmeter` on the web server's PATH. No origin is allowed by default. Authorize every load target before running; the UI requests confirmation. Each plan has one independent HTTP JSON sampler (GET/POST/PUT/PATCH/DELETE), 1–10 users, 5–60 seconds, and at least 300 ms think time. No uploaded JMX, scripts, custom headers/auth, cookies, redirects, session correlation, or chained requests are supported. Do not use production credentials or customer data.
+
+The server executes `jmeter -n` with bounded duration and temporary files in ignored `data/jmeter/`, then persists only a sample summary, decision and source-requirement snapshot. CLI output and JTL files are discarded. Exact p95/error/throughput phrases in selected requirements are interpreted conservatively; conflicting/ambiguous criteria need review. Otherwise the labelled implicit limits are **p95 ≤ 1,000 ms** and **error rate ≤ 1%**; absent throughput criteria need review. Wilson one-sided 95% bounds for p95-in-budget and error proportion assume independent samples. Reports separate JMeter HTTP evidence from Playwright/RobotJS runs. This is a single-server, in-process runner, not a durable queue or a general-purpose load generator. The origin allowlist is not a DNS-rebinding defense; expose this feature only in a trusted, single-operator environment. A real JMeter CLI has not been verified in this sandbox.
+
 ## Playwright
 Install the browser once: `npx playwright install chromium` (Linux: add `--with-deps`). Try the built-in target at `/demo-target`.
 
