@@ -23,6 +23,9 @@ Delivered inside the current architecture rather than as a new enterprise tier, 
 
 ### Wave 0 — Enterprise trust and runtime foundation
 
+> **Scoped 2026-11-20 → see [WAVE_0_SCOPE.md](./WAVE_0_SCOPE.md)** for the engineering plan: locked decisions (single-node SQLite, OIDC+SAML, S3-compatible artifacts + Vault/KMS), sub-waves W0.1a–W0.5, migration sequence 0007–0011, exit criteria made testable, and open questions. Not started; implementation requires approval per sub-wave.
+
+
 | Priority | Capability | Why it matters | Implementation guidance |
 |---|---|---|---|
 | P0 | SSO, RBAC, and tenant isolation | Current routes have no authentication/authorization layer. Enterprise rollout is unsafe without it. | Add OIDC/SAML SSO; tenant/project roles such as admin, test architect, executor, reviewer, and read-only auditor. Enforce authorization in every route and worker query, not only in the UI. Add SCIM later. |
