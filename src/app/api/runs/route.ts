@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { runs, workflows } from "@/db/schema";
 import { body, fail, ok } from "@/lib/api";
-import { startRun } from "@/lib/runner";
+import { startRun, failStaleRuns } from "@/lib/runner";
 import { failStaleDesktopRuns } from "@/lib/desktopService";
 import { authorize } from "@/lib/agentAuth";
 import { beginIdempotency } from "@/lib/idempotency";
@@ -15,6 +15,7 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const db = await getDb();
   await failStaleDesktopRuns(db);
+  await failStaleRuns(db);
   const wid = new URL(req.url).searchParams.get("workflowId");
   return ok(wid ? await db.select().from(runs).where(eq(runs.workflowId, wid)).orderBy(desc(runs.startedAt)).limit(20) : await db.select().from(runs).orderBy(desc(runs.startedAt)).limit(50));
 }
@@ -22,6 +23,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const db = await getDb();
+    await failStaleRuns(db);
     const b = await body<{ workflowId: string; mode?: "playwright" | "dry-run"; targetUrl?: string }>(req);
     if (!b.workflowId) return fail("workflowId required");
     const mode = b.mode === "dry-run" ? "dry-run" : "playwright";

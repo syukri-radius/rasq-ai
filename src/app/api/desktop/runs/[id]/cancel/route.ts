@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { desktopAgents, runs, runSteps } from "@/db/schema";
 import { fail, ok, type Params } from "@/lib/api";
 import { authorize } from "@/lib/agentAuth";
+import { notifyWebhooks, runCompletedData, loadRunForEvent } from "@/lib/webhooks";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,12 @@ export async function POST(req: Request, { params }: Params<"id">) {
   if (queued) {
     await db.update(runSteps).set({ status: "skipped", message: "Not executed: run cancelled before desktop preflight." }).where(and(eq(runSteps.runId, id), inArray(runSteps.status, ["pending", "running"])));
     if (run.desktopAgentId) await db.update(desktopAgents).set({ currentRunId: null, availability: "idle" }).where(eq(desktopAgents.id, run.desktopAgentId));
+    try {
+      const finished = await loadRunForEvent(db, id);
+      if (finished) notifyWebhooks(db, "desktop.run.completed", runCompletedData(finished));
+    } catch (e) {
+      console.warn("desktop.run.completed webhook notification failed:", e instanceof Error ? e.message : e);
+    }
   }
   return ok({ cancelled: true, acknowledged: queued });
 }

@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb, type Db } from "@/db";
 import { performancePlans, performanceRuns, requirementDocs, requirements } from "@/db/schema";
 import { body, fail, ok } from "@/lib/api";
@@ -6,6 +6,7 @@ import { redact } from "@/lib/ai";
 import { analyze, checkTarget, PerformancePlanSchema, type PerformancePlan, type RequirementEvidence } from "@/lib/performance";
 import { allowedOrigins, cancelPerformanceRun, runJmeter } from "@/lib/performanceRunner";
 import { authorize } from "@/lib/agentAuth";
+import { failStalePerformanceRuns, notifyPerformanceRunCompleted } from "@/lib/performanceService";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -23,10 +24,12 @@ async function executeRun(db: Db, id: string, projectId: string, plan: Performan
       if (result.status === "passed") result.status = "needs-review";
     }
     await db.update(performanceRuns).set({ status: result.status, summary: result.summary, completedAt: new Date() }).where(eq(performanceRuns.id, id));
+    await notifyPerformanceRunCompleted(db, id);
   } catch (e) {
     // Never persist CLI output, response bodies or user-controlled target details.
     const error = e instanceof Error && /already active|cancelled or timed out|not installed|no samples|exceeds 5 MB|lacks required CSV fields|Malformed JMeter sample|exceeds the sample limit|exited with code/.test(e.message) ? e.message : "JMeter execution or result analysis failed.";
     await db.update(performanceRuns).set({ status: "error", error, completedAt: new Date() }).where(eq(performanceRuns.id, id));
+    await notifyPerformanceRunCompleted(db, id);
   }
 }
 
@@ -55,7 +58,7 @@ export async function GET(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");
   const db = await getDb();
-  await db.update(performanceRuns).set({ status: "error", error: "Run interrupted or exceeded the server deadline.", completedAt: new Date() }).where(and(eq(performanceRuns.id, id), eq(performanceRuns.status, "running"), lt(performanceRuns.startedAt, new Date(Date.now() - 120_000))));
+  await failStalePerformanceRuns(db);
   const [run] = await db.select().from(performanceRuns).where(eq(performanceRuns.id, id));
   return run ? ok(run) : fail("Run not found", 404);
 }

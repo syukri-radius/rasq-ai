@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { performancePlans, performanceRuns, projects, requirementDocs, requirements, testCases, testTraceability } from "@/db/schema";
 import { body, fail, ok } from "@/lib/api";
@@ -6,6 +6,7 @@ import { redact } from "@/lib/ai";
 import { checkTarget, PerformancePlanSchema } from "@/lib/performance";
 import { allowedOrigins } from "@/lib/performanceRunner";
 import { authorize } from "@/lib/agentAuth";
+import { failStalePerformanceRuns } from "@/lib/performanceService";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
   const projectId = new URL(req.url).searchParams.get("projectId");
   if (!projectId) return fail("projectId required");
   const db = await getDb();
-  await db.update(performanceRuns).set({ status: "error", error: "Run interrupted or exceeded the server deadline.", completedAt: new Date() }).where(and(eq(performanceRuns.status, "running"), lt(performanceRuns.startedAt, new Date(Date.now() - 120_000))));
+  await failStalePerformanceRuns(db);
   const cases = await db.select({ id: testCases.id, caseKey: testCases.caseKey, title: testCases.title, category: testCases.category }).from(testCases).where(eq(testCases.projectId, projectId));
   const docs = await db.select({ id: requirementDocs.id, name: requirementDocs.name }).from(requirementDocs).where(eq(requirementDocs.projectId, projectId));
   const reqs = docs.length ? await db.select().from(requirements).where(inArray(requirements.docId, docs.map((d) => d.id))) : [];
