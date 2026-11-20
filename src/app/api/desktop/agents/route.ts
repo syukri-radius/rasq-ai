@@ -3,10 +3,13 @@ import { getDb } from "@/db";
 import { desktopAgents } from "@/db/schema";
 import { fail, ok } from "@/lib/api";
 import { failStaleDesktopRuns, publicDesktopAgent } from "@/lib/desktopService";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await authorize(req, "desktop:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   await failStaleDesktopRuns(db);
   const rows = await db.select().from(desktopAgents).orderBy(desc(desktopAgents.createdAt));
@@ -14,6 +17,8 @@ export async function GET() {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "desktop:revoke");
+  if ("response" in auth) return auth.response;
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!id) return fail("Agent id required");
   const db = await getDb();

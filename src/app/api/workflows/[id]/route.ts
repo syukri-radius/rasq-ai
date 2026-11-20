@@ -3,10 +3,13 @@ import { getDb } from "@/db";
 import { workflows } from "@/db/schema";
 import { body, fail, ok, type Params } from "@/lib/api";
 import { validateN8n } from "@/lib/n8n";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: Params<"id">) {
+export async function GET(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "workflows:read");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [w] = await db.select().from(workflows).where(eq(workflows.id, id));
@@ -14,6 +17,8 @@ export async function GET(_req: Request, { params }: Params<"id">) {
 }
 
 export async function PUT(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "workflows:write");
+  if ("response" in auth) return auth.response;
   try {
     const { id } = await params;
     const db = await getDb();
@@ -29,7 +34,9 @@ export async function PUT(req: Request, { params }: Params<"id">) {
   }
 }
 
-export async function DELETE(_req: Request, { params }: Params<"id">) {
+export async function DELETE(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "delete:artifacts");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   await db.delete(workflows).where(eq(workflows.id, id));

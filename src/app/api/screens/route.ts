@@ -7,10 +7,13 @@ import { body, fail, ok } from "@/lib/api";
 import { normalizeControls, type InControl } from "@/lib/screens";
 import { PERCEPTION_MODEL } from "@/lib/types";
 import { DATA_DIR } from "@/lib/runner";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "screens:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const u = new URL(req.url);
   const pid = u.searchParams.get("projectId");
@@ -25,6 +28,8 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "screens:write");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const b = await body<{ projectId: string; recordingId?: string | null; name: string; groupKey?: string; source?: string; width: number; height: number; imageDataUrl: string; frameCount?: number; timestampMs?: number; aiModel?: string | null; controls: InControl[] }>(req);
   const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(b.imageDataUrl ?? "");

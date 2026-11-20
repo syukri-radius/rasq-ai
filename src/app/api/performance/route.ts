@@ -5,10 +5,13 @@ import { body, fail, ok } from "@/lib/api";
 import { redact } from "@/lib/ai";
 import { checkTarget, PerformancePlanSchema } from "@/lib/performance";
 import { allowedOrigins } from "@/lib/performanceRunner";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "performance:read");
+  if ("response" in auth) return auth.response;
   const projectId = new URL(req.url).searchParams.get("projectId");
   if (!projectId) return fail("projectId required");
   const db = await getDb();
@@ -39,6 +42,8 @@ async function validate(projectId: string, caseId: string, raw: unknown) {
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "performance:plan");
+  if ("response" in auth) return auth.response;
   try {
     const b = await body<{ projectId: string; caseId: string; plan: unknown }>(req);
     const { db, plan } = await validate(b.projectId, b.caseId, b.plan);
@@ -48,6 +53,8 @@ export async function POST(req: Request) {
 }
 
 export async function PUT(req: Request) {
+  const auth = await authorize(req, "performance:plan");
+  if ("response" in auth) return auth.response;
   try {
     const b = await body<{ id: string; caseId?: string; plan: unknown }>(req);
     const db = await getDb();
@@ -61,6 +68,8 @@ export async function PUT(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "performance:plan");
+  if ("response" in auth) return auth.response;
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");
   const db = await getDb();

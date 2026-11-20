@@ -6,11 +6,14 @@ import { buildSystem, callModel, errMsg, parseJson, provenanceOf, redact, resolv
 import { fail, ok } from "@/lib/api";
 import { AiRequirementsSchema } from "@/lib/schemas";
 import { classify, parseRequirements, type ParsedReq } from "@/lib/srs";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "requirements:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
   const docs = pid ? await db.select().from(requirementDocs).where(eq(requirementDocs.projectId, pid)).orderBy(desc(requirementDocs.createdAt)) : [];
@@ -30,6 +33,8 @@ async function extractText(file: File): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "requirements:write");
+  if ("response" in auth) return auth.response;
   try {
     const db = await getDb();
     const form = await req.formData();
@@ -83,6 +88,8 @@ Requirement IDs must be copied EXACTLY as written in the document; never invent 
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "delete:artifacts");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const id = new URL(req.url).searchParams.get("docId");
   if (!id) return fail("docId required");

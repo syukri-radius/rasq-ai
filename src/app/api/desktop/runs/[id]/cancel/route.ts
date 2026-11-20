@@ -2,10 +2,13 @@ import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { desktopAgents, runs, runSteps } from "@/db/schema";
 import { fail, ok, type Params } from "@/lib/api";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: Request, { params }: Params<"id">) {
+export async function POST(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "desktop:attend");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [run] = await db.select().from(runs).where(eq(runs.id, id));

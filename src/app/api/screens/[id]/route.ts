@@ -6,10 +6,13 @@ import { controls, screens } from "@/db/schema";
 import { body, fail, ok, type Params } from "@/lib/api";
 import { normalizeControls, type InControl } from "@/lib/screens";
 import { DATA_DIR } from "@/lib/runner";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function PUT(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "screens:write");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [existing] = await db.select().from(screens).where(eq(screens.id, id));
@@ -37,7 +40,9 @@ export async function PUT(req: Request, { params }: Params<"id">) {
   return ok({ ...updated, controls: savedControls, controlCount: valid.length });
 }
 
-export async function DELETE(_req: Request, { params }: Params<"id">) {
+export async function DELETE(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "delete:artifacts");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [s] = await db.select().from(screens).where(eq(screens.id, id));
@@ -48,7 +53,9 @@ export async function DELETE(_req: Request, { params }: Params<"id">) {
   return ok();
 }
 
-export async function GET(_req: Request, { params }: Params<"id">) {
+export async function GET(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "screens:read");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [s] = await db.select().from(screens).where(eq(screens.id, id));

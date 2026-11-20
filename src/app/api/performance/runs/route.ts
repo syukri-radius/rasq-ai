@@ -5,6 +5,7 @@ import { body, fail, ok } from "@/lib/api";
 import { redact } from "@/lib/ai";
 import { analyze, checkTarget, PerformancePlanSchema, type PerformancePlan, type RequirementEvidence } from "@/lib/performance";
 import { allowedOrigins, cancelPerformanceRun, runJmeter } from "@/lib/performanceRunner";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -30,6 +31,8 @@ async function executeRun(db: Db, id: string, projectId: string, plan: Performan
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "performance:load");
+  if ("response" in auth) return auth.response;
   const b = await body<{ planId: string; confirm: boolean }>(req);
   if (b.confirm !== true || !b.planId) return fail("Explicit confirmation and planId required before generating load.");
   const db = await getDb();
@@ -47,6 +50,8 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "performance:read");
+  if ("response" in auth) return auth.response;
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");
   const db = await getDb();
@@ -56,6 +61,8 @@ export async function GET(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "performance:load");
+  if ("response" in auth) return auth.response;
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");
   const db = await getDb();

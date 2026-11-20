@@ -5,8 +5,11 @@ import { getDb } from "@/db";
 import { recordings } from "@/db/schema";
 import { ok, type Params } from "@/lib/api";
 import { DATA_DIR } from "@/lib/runner";
+import { authorize } from "@/lib/agentAuth";
 
-export async function GET(_req: Request, { params }: Params<"id">) {
+export async function GET(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "screens:read");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [r] = await db.select().from(recordings).where(eq(recordings.id, id));
@@ -15,7 +18,9 @@ export async function GET(_req: Request, { params }: Params<"id">) {
   return new Response(new Uint8Array(buf), { headers: { "content-type": r.mimeType, "content-length": String(buf.length), "cache-control": "private, max-age=300" } });
 }
 
-export async function DELETE(_req: Request, { params }: Params<"id">) {
+export async function DELETE(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "delete:artifacts");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [r] = await db.select().from(recordings).where(eq(recordings.id, id));

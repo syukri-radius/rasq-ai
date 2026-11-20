@@ -4,7 +4,7 @@ Zero-DOM optical automation: client perception supplies geometry, an optional mu
 
 **Stack:** Next.js (App Router) · Drizzle ORM + libsql/SQLite (`data/rasq.db`) · Playwright · `@xyflow/react` (ReactFlow, the engine behind koolii/react-workflow-editor) · zod.
 
-**Version:** 1.0.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
+**Version:** 1.1.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
 
 ## Flow
 1. **Record & Scan** – full-screen recorder (start / pause / stop / cancel), screenshot/video upload, or server-side URL capture. Perception pipeline: luminance → Sobel → density grid → connected components → merged candidate regions → geometric labels + dHash template hash. Frames are grouped per page/window. Saved recording/screen scans can be reopened, edited, and updated in place while preserving unchanged control IDs.
@@ -48,9 +48,23 @@ The isolated `desktop-agent/` Electron package executes web-compiled desktop man
 
 See [Desktop Agent](./DESKTOP_AGENT.md) for enrollment, supported actions/assertions, script export, packaging, safety controls, and platform limitations.
 
+## External agents (API keys)
+
+RASQ-Ai exposes a scoped, audited machine surface so external AI agents (CI, orchestrators, tool-calling models) can use a running instance without the single-operator browser session:
+
+- **Keys**: SHA-256-hashed, plaintext shown once, revocable, optionally expiring. Mint via `npm run agent:key -- --name <label> --preset` or `POST /api/agent-keys` (operator only). List/revoke via `GET|DELETE /api/agent-keys`.
+- **Scopes**: separate read/generate/execution (`runs:start:dry-run` vs `runs:start:playwright`, `performance:load`, `desktop:attend`, `desktop:confirm`, `desktop:revoke`) and `delete:artifacts`. The recommended starter set grants observe + generate + dry-run only. Execution and deletion scopes are never in it.
+- **Fail closed**: a presented-but-invalid key gets `401 invalid_api_key` — never operator fallback. Missing scope → `403 insufficient_scope`. Mutations over a per-process budget (default 120/min, `RASQ_AGENT_RATE_LIMIT`) → `429 rate_limited`.
+- **Idempotency**: `Idempotency-Key` on `POST /api/runs`, `POST /api/tests`, `POST /api/workflows` replays the stored 2xx response (`idempotent-replay: true`) or returns `409 idempotency_conflict`.
+- **Attribution**: every mutating call is recorded in the append-only `audit_log` table (actor, action, ok/denied, IP). Provenance strings in artifacts are unchanged; the audit log is the agent attribution record.
+- **Discovery**: OpenAPI 3.1 at `GET /api/openapi.json` (public) lists every operation and its `x-rasq-scope`. Agents start with [AGENT_GUIDE.md](./AGENT_GUIDE.md) and `GET /llms.txt`.
+
+The browser UI remains a single-operator surface without login; keep the deployment behind trusted access. See [AGENT_GUIDE.md](./AGENT_GUIDE.md) for the threat model, scope catalog, curl recipes, error codes and safety rules.
+
 ## Agent and design documentation
 
 - [Master Prompt](./MASTER_PROMPT.md) — reusable instructions for AI coding, QA, security, and architecture tasks, including RASQ-Ai's non-negotiable evidence, privacy, visual-locator, and traceability rules.
+- [Agent Guide](./AGENT_GUIDE.md) — how external AI agents use a running instance: API keys, scope catalog, idempotency, audit trail, error codes, safety rules, and decision record.
 - [Context Memory](./CONTEXT_MEMORY.md) — a point-in-time architecture and behavior handoff covering routes, persistence, AI routing, perception, workflows, runs, reports, known constraints, and validation commands. Verify it against the current source and update it when architecture changes.
 - [AI API JSON Integration](./AI_API_JSON_INTEGRATION.md) — canonical request/response contract, generic protocol templates, routing behavior, and security limits.
 - [Enterprise Roadmap](./ENTERPRISE_ROADMAP.md) — prioritized recommendations for identity, durable execution, test governance, visual intelligence, AI routing, scale, and integrations.

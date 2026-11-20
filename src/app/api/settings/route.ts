@@ -4,10 +4,13 @@ import { aiProviders, modelRoutes, policies, settings } from "@/db/schema";
 import { getSetting, keyConfigured } from "@/lib/ai";
 import { body, fail, ok } from "@/lib/api";
 import { TASKS } from "@/lib/types";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = await authorize(req, "settings:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const providers = (await db.select().from(aiProviders)).map((p) => ({ ...p, keyConfigured: keyConfigured(p) }));
   const routes = await db.select().from(modelRoutes);
@@ -16,6 +19,8 @@ export async function GET() {
 }
 
 export async function PUT(req: Request) {
+  const auth = await authorize(req, "settings:write");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const b = await body<{
     aiMode?: string;

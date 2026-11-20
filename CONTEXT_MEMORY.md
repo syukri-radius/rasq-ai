@@ -8,11 +8,12 @@ Point-in-time repository handoff for AI agents and maintainers. Read this with [
 |---|---|
 | Repository | `syukri-radius/rasq-ai` |
 | Product | **RASQ-Ai — trustworthy visual test automation** |
-| Application version | `1.0.0` for the web application; `desktop-agent/` is versioned separately at `0.1.0` |
+| Application version | `1.1.0` for the web application; `desktop-agent/` is versioned separately at `0.1.0` |
 | Source snapshot reviewed | REST performance feature reviewed on `arena/2be74e85-rasq-ai` from base `0eadc786a07a1cc12557eda81a634042f79a0bcf` (uncommitted working-tree change at this snapshot); earlier UI snapshot: `30fcac12bb65ef7f7e1e9b9045979f46c328ebeb` for the UI layer: the 1.0.0 glass-theme change merged onto `26985f028e1c4617acf89e4ef9a67ffa98112335`. Everything outside the UI layer was last reviewed at `8fb19db2143c7ec2ce86cd84d5cd9aaf7a3640a8` plus the attended RobotJS Desktop Agent implementation |
-| Memory generated / updated | 2026-11-12 for REST performance testing; 2026-11-12 for OpenCode Go session header and provider option; 2026-11-11 for appearance, version and the browser steps for blocked downloads; 2026-11-09 for everything else |
+| Memory generated / updated | 2026-11-20 for the external-agent surface (API keys, scopes, audit, idempotency, OpenAPI, llms.txt); 2026-11-12 for REST performance testing; 2026-11-12 for OpenCode Go session header and provider option; 2026-11-11 for appearance, version and the browser steps for blocked downloads; 2026-11-09 for everything else |
 | Review method | 2026-11-11: source review of the UI layer plus web typecheck, lint, unit tests, production build, and scripted Chromium checks of the themed UI. 2026-11-09: static source review plus typecheck, lint, production build, compiler/agent unit tests, fresh/upgrade migrations, and real HTTP integration with a headless mock desktop agent |
 | Runtime validation at update | **2026-11-12 (REST performance feature):** web typecheck, 38 tests (fresh and legacy migrations, plan safety, SLA conflict/insufficient confidence, CLI fixture, cancellation, API create/update/approve/poll/report), lint (0 errors, 8 existing warnings), production build passed. Chromium 153 via `@sparticuz/chromium` rendered `/performance` in four themes at 1440×900 and 390×900 with HTTP 200, no page errors or document overflow; screenshots saved under ignored `data/` for local review. `/demo-target` 1280×800 screenshot was byte-identical to the earlier reference. No real JMeter CLI or field load test occurred. **2026-11-12 (Go session header):** local mock Go endpoint verified the prefixed session header, reuse across requests, user agent, unchanged key/JSON payload, and absence of the header on a non-Go endpoint. No live Go call was made. **2026-11-12 (OpenCode Go option):** typecheck, 32 web tests (including isolated fresh-database seed/Local kill-switch and local HTTP mock gateway contract), lint (0 errors, 8 existing unused-disable warnings), and production build passed. No real Go account/provider call or browser visual check was performed. **2026-11-11 (themes, version):** web typecheck, 30 web unit tests and the production build passed; lint retains the same eight unused-disable warnings. Chromium 153 with software rendering drove the production build. A rendered-pixel audit compared each visible text run with the pixels behind it across 15 UI states (about 2,300 text runs per theme at 1440×900): the lowest text contrast was 5.70:1 in dark purple, 5.48:1 in light purple, 5.48:1 to 6.42:1 in three custom palettes, and 7.50:1 or more in four random palettes (seeds 1, 2, 3 and 5). Dark purple, light purple and one random palette gave the same minimums at 390×844. Six of these twelve runs were repeated on the final build; the other six ran on an earlier build of the same day that differed only in layout classes and one sentence of interface copy. Theme selection, persistence, reload without a frame of another theme, cross-tab sync, keyboard use, refused storage writes and corrupt-storage fallback were exercised through the real UI. `/demo-target` screenshots were byte-identical to the previous build at 1280×800 and 1440×900, and the content box of `main` had the same position and width as in the previous build at eleven viewport widths from 800px to 2560px. Horizontal overflow at 390, 768, 1024 and 1440px matched the previous build, except that the run-summary badges on `/workflows` now wrap instead of overflowing. URL capture returned a byte-identical screenshot, and a Playwright run of a generated 98-step workflow produced the same status and message for every step as the previous build, but only through a local browser-launcher shim, because Playwright's own browser download was unavailable. Not validated: Firefox, Safari, real devices and external AI providers; `desktop-agent/` was neither changed nor re-tested. **2026-11-11 (browser steps):** starting from an empty sandbox, the two steps under **Browser checks when Playwright's download is blocked** produced a working Chromium 153. Through its launcher, URL capture of `/demo-target` and a two-node Playwright run of it passed, and `/settings` rendered in all four themes at 1440×900 and in light purple at 390×844. No application code changed. **2026-11-09 (desktop agent):** Web/agent typechecks and agent build passed; web production build and mock HTTP dry-run/attended/cancellation paths passed; lint retains eight existing unused-disable warnings. No real OS input, packaged agent, external AI provider, or Chromium execution was used. |
+| 1.1.0 validation | 2026-11-20 (external-agent surface): web typecheck, 47 tests (incl. fresh-database `0004_agent_surface` migration via `getDb()` and the agent-surface suite), lint (0 errors, same 8 existing warnings), production build passed. Live HTTP smoke against an isolated `RASQ_DB_URL`: public health/OpenAPI, operator passthrough, 401 on garbage/revoked keys, 403 on missing scopes and on agent key-management, `audit_log` rows for ok/denied, `Idempotency-Key` replay (`idempotent-replay: true`) and 409 on body drift, CLI key mint/list/revoke, agent-driven Local test generation (16 cases), workflow creation and dry-run (50 steps skipped, no browser), report generation. No external provider, Playwright browser, JMeter CLI, or desktop agent was used. |
 | License file | `Commercial Standard License`, naming PT Radius Data Solusi; see `LICENSE` for its usage/redistribution restrictions and remaining template language |
 
 This document describes the snapshot above. Later commits may invalidate details. Statements in **Known constraints** are observations, not automatically approved feature work.
@@ -79,7 +80,7 @@ The project is currently a compact single-operator application, not a demonstrat
 - `unpdf` for server-side PDF text extraction.
 - `lucide-react` for icons.
 - `pg`, `@types/pg`, and `dotenv` are dependencies, but the reviewed runtime path uses libsql/SQLite rather than PostgreSQL.
-- `package.json` still has the starter name `nextjs-postgresql-template` and now carries `version` `1.0.0`; UI metadata and runtime behavior identify the app as RASQ-Ai. `src/lib/version.ts` exports the same value as `APP_VERSION` for the sidebar, the root metadata (`<meta name="version">`) and `/api/health`; `tests/version.test.ts` fails when it drifts from `package.json` or `package-lock.json`. `desktop-agent/` is versioned separately and remains `0.1.0`.
+- `package.json` still has the starter name `nextjs-postgresql-template` and now carries `version` `1.1.0`; UI metadata and runtime behavior identify the app as RASQ-Ai. `src/lib/version.ts` exports the same value as `APP_VERSION` for the sidebar, the root metadata (`<meta name="version">`) and `/api/health`; `tests/version.test.ts` fails when it drifts from `package.json` or `package-lock.json`. `desktop-agent/` is versioned separately and remains `0.1.0`.
 
 Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.config.ts`. Server Actions have a configured 50 MB body limit, although the reviewed features primarily use route handlers rather than Server Actions.
 
@@ -96,6 +97,13 @@ Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.co
 | `src/components/ModelPicker.tsx` | Per-task model route selector |
 | `src/components/DesktopRunPanel.tsx` | Desktop compiler preview/export, agent selection, confirmation, cancellation, live preview |
 | `desktop-agent/` | Isolated secure Electron shell, fixed manifest runner, Windows/mock drivers, headless mock controller, packaging/target |
+| `src/lib/agentAuth.ts` | External-agent API keys: `rasq_…` generation, SHA-256 hash storage, scope catalog, `resolveActor`/`authorize`/`requireOperator`, per-process rate limiter |
+| `src/lib/audit.ts` | Append-only `audit_log` writer (best-effort; never throws into the request) |
+| `src/lib/idempotency.ts` | `Idempotency-Key` begin/store for `POST /api/runs`, `POST /api/tests`, `POST /api/workflows` (24h TTL) |
+| `src/lib/openapi.ts` + `src/app/api/openapi.json/route.ts` | Hand-maintained OpenAPI 3.1 public discovery document with per-operation `x-rasq-scope` |
+| `src/app/api/agent-keys/route.ts` | Operator-only key mint/list/revoke; plaintext returned once |
+| `scripts/create-agent-key.ts` | Shell bootstrap for keys (`npm run agent:key`) |
+| `AGENT_GUIDE.md`, `public/llms.txt` | External-agent guide (threat model, scopes, recipes, errors, safety rules) and LLM entry point |
 | `src/app/(app)/page.tsx` | Server-rendered dashboard and aggregate counts |
 | `src/app/(app)/scan/page.tsx` | Recorder, uploads, capture UI, perception review, AI enrichment, saving |
 | `src/app/(app)/requirements/page.tsx` | SRS upload/paste and requirement display |
@@ -237,7 +245,7 @@ After that, Playwright's default headless launch works unchanged for the app's U
 | `cd desktop-agent && npm run build` | esbuild main/preload/headless bundles with Electron/RobotJS external |
 | `cd desktop-agent && npm run package:win` | Windows-only unsigned development ZIP staging; not a signed installer |
 
-Focused web and agent tests are checked in; no CI configuration was added. `npm test` picks up every `tests/*.test.ts`, including the theme-engine and version tests.
+Focused web and agent tests are checked in; no CI configuration was added. `npm test` picks up every `tests/*.test.ts`, including the theme-engine, version, and agent-surface tests (`tests/agentSurface.test.ts`). At the 1.1.0 snapshot, 47 tests pass, lint retains the eight existing unused-disable warnings, and the production build passed.
 
 `npm run build` rewrites the tracked `next-env.d.ts`, because the committed copy points at the development type folder (`.next/dev/types`) and a production build points it at `.next/types`. Restore it with `git checkout -- next-env.d.ts` before committing.
 
@@ -257,6 +265,7 @@ Focused web and agent tests are checked in; no CI configuration was added. `npm 
 | `RASQ_CONTROL_URL` | Agent/headless-mock control-plane base URL; plain HTTP only for loopback development |
 | `RASQ_DEVICE_TOKEN` | Optional previously enrolled agent credential; otherwise the agent can enroll |
 | `RASQ_DESKTOP_DRIVER` | `mock` for safe tests; omitted selects the real RobotJS driver |
+| `RASQ_AGENT_RATE_LIMIT` | Optional per-process mutation budget per agent key per minute; default `120` |
 
 No API key is needed for the default Local engine. The seeded Ollama provider has an empty key-env name and defaults to `http://127.0.0.1:11434/v1`; selecting it still uses the provider/model-call path.
 
@@ -307,11 +316,15 @@ The selected project ID is stored in browser `localStorage` under `rasq.project`
 
 ### API routes
 
-The `ok` helper returns the supplied JSON payload directly, not wrapped in a `data` property. The `fail` helper returns `{ "error": string }`.
+The `ok` helper returns the supplied JSON payload directly, not wrapped in a `data` property. The `fail` helper returns `{ "error": string }`, optionally with a machine-readable `"code"` (additive).
+
+**External-agent access (1.1.0):** every route except `/api/health` and `/api/openapi.json` requires either the single-operator browser session (no `Authorization` header; UI unchanged) or a scoped `Bearer rasq_…` API key. A present-but-invalid credential is `401 invalid_api_key` (never operator fallback); a missing scope is `403 insufficient_scope`; agent mutations over `RASQ_AGENT_RATE_LIMIT` are `429 rate_limited`; every agent/operator mutation is recorded in the append-only `audit_log` table. The device-authenticated routes (`/api/desktop/agents/enroll`, `…/poll`, `…/bundle`, `…/events`, `…/evidence`) keep their device-token auth and are not scope-gated. Scope-per-route is enforced in each handler via `authorize()` (`src/lib/agentAuth.ts`); `/api/runs` selects between `runs:start:dry-run` and `runs:start:playwright` by the requested `mode`. `POST /api/runs`, `POST /api/tests`, `POST /api/workflows` honor `Idempotency-Key` (24h replay of 2xx bodies with `idempotent-replay: true`; different body → `409 idempotency_conflict`). `/api/agent-keys` is operator-only; agents may not mint, list, or revoke keys. `GET /api/openapi.json` is the public discovery document. See `AGENT_GUIDE.md`.
 
 | Route | Methods and behavior |
 |---|---|
-| `/api/health` | `GET`: database `select 1`; returns `{ ok, engine, app, version }` |
+| `/api/health` | `GET`: database `select 1`; returns `{ ok, engine, app, version }` (public) |
+| `/api/openapi.json` | `GET`: public OpenAPI 3.1 discovery document; no secrets |
+| `/api/agent-keys` | `GET`/`POST`/`DELETE`: operator-only API-key list/mint/revoke; plaintext key returned once on create |
 | `/api/projects` | `GET`: all projects; `POST`: create with validated surface fallback |
 | `/api/settings` | `GET`: AI mode, providers plus key-configured flags, routes, policies; `PUT`: update mode/route/policy |
 | `/api/providers` | `POST`/`PATCH`: validate protocol, endpoint, key-env name, models, and declarative JSON config; `DELETE?id=`: remove and reset routes using it |
@@ -351,7 +364,7 @@ The client `api<T>()` helper sends JSON when given `json`, defaults such request
 
 ## 5. Persistence model
 
-`src/db/schema.ts` defines eighteen pre-existing tables plus two performance tables:
+`src/db/schema.ts` defines eighteen pre-existing tables plus two performance tables and, since 1.1.0, three agent-surface tables (`api_keys`, `audit_log`, `idempotency_keys`) via migration `0004_agent_surface.sql`:
 
 | Table | Key fields and relationships |
 |---|---|
@@ -375,10 +388,13 @@ The client `api<T>()` helper sends JSON when given `json`, defaults such request
 | `run_steps` | Run FK cascade; ordered node snapshot, status/message/duration/evidence JSON |
 | `desktop_events` | Run FK cascade; agent ID, unique run+sequence, session/step/complete payload, timestamp; no frame streams |
 | `reports` | Project FK cascade; generated Markdown and provenance |
+| `api_keys` | External-agent credentials: SHA-256 `key_hash` (unique), display `key_prefix`, JSON `scopes`, `expires_at`/`revoked_at`/`last_used_at`; plaintext never stored |
+| `audit_log` | Append-only `actor_type`/`actor_id`/`actor_name`, `action` (`METHOD /path`), `status` (`ok`/`denied`), truncated `detail`, `ip`; indexed on `created_at` |
+| `idempotency_keys` | Primary key (`actor`, `key`); `endpoint`, `body_hash`, stored status/response for 24h replay of 2xx outcomes |
 
 IDs default to `crypto.randomUUID()`; creation timestamps default in application code. SQLite JSON columns carry TypeScript types through Drizzle.
 
-Migration `0003_performance_plans.sql` adds both performance tables; the repository-pinned drizzle-kit 0.18.1 cannot generate against ORM 0.45.x and modern drizzle-kit cannot parse the existing v6 snapshot, so the additive migration/journal/new v6 snapshot were created deliberately and tested on fresh and pre-0002 databases without rewriting applied migrations. JMeter temporary files under ignored `data/jmeter/<runId>/` are removed after each run. Database cascades and file deletion are separate concerns. Recording and screen DELETE handlers explicitly remove their files. Workflow deletion cascades run rows, but the reviewed handler does not remove the corresponding `data/runs/<runId>/` screenshot directories.
+Migration `0003_performance_plans.sql` adds both performance tables. Migration `0004_agent_surface.sql` (hand-written for the same drizzle-kit constraint) adds `api_keys`, `audit_log` and `idempotency_keys` plus their indexes, with a hand-built `0004_snapshot.json` chained to the `0003` snapshot and a journal entry; fresh databases apply it cleanly through the migrator and the existing migration tests exercise the fresh path. The repository-pinned drizzle-kit 0.18.1 cannot generate against ORM 0.45.x and modern drizzle-kit cannot parse the existing v6 snapshot, so additive migrations, journals and snapshots are created deliberately without rewriting applied migrations. JMeter temporary files under ignored `data/jmeter/<runId>/` are removed after each run. Database cascades and file deletion are separate concerns. Recording and screen DELETE handlers explicitly remove their files. Workflow deletion cascades run rows, but the reviewed handler does not remove the corresponding `data/runs/<runId>/` screenshot directories.
 
 For schema changes, update `src/db/schema.ts` and generate a new migration:
 
@@ -687,7 +703,7 @@ These are current-source facts to preserve or address intentionally, not claims 
 10. **SRS regeneration is broad by default:** generating from one SRS replaces the project's full case set unless `replace: false` is supplied. Visual generation appends by default; repeated visual generation can therefore create repeated interactions intentionally.
 11. **Visual assertions have limited oracles:** pixel change and region change do not establish semantic correctness or exact control state.
 12. **Custom n8n nodes are not stock-n8n executables:** compatibility refers to workflow JSON structure/import/export, not availability of RASQ-Ai custom nodes in n8n itself.
-13. **Starter metadata remains:** the package is versioned `1.0.0`, but its name (`nextjs-postgresql-template`) and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
+13. **Starter metadata remains:** the package is versioned `1.1.0`, but its name (`nextjs-postgresql-template`) and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
 14. **No checked-in environment template/deployment manifest:** setup relies on source defaults and README; production topology is not defined here.
 15. **License text needs deliberate handling:** `LICENSE` is not a permissive open-source license. It names PT Radius Data Solusi, states machine/usage/redistribution restrictions, and retains template/source-code language that should be reviewed rather than silently ignored or rewritten.
 16. **AI gateway is synchronous:** the generic contract does not yet provide streaming, retries/failover, OAuth exchange, SigV4, mTLS, usage/cost metering, or provider health routing. Endpoint egress controls remain a deployment responsibility. See `ENTERPRISE_ROADMAP.md` for the recommended sequence.
@@ -699,6 +715,9 @@ These are current-source facts to preserve or address intentionally, not claims 
 22. **Blocked browser storage breaks the app (found during the 1.0.0 review, not changed):** when reading `localStorage` itself throws, `ProjectProvider` in `src/components/ui.tsx` fails and the shell shows the framework error page. The theme store tolerates blocked storage; the project selector does not.
 23. **Narrow viewports overflow in two places (unchanged by the redesign):** with the demo data, the `/scan` editor at phone width and the `/reports` preview below about 1080px are wider than the viewport and scroll horizontally. The pages are laid out for desktop use.
 24. **REST JMeter load testing is single-server and unverified with real JMeter:** only one independent JSON REST request per plan (no auth/correlation/chains); CLI must be installed on web server. `RASQ_JMETER_ALLOWED_ORIGINS` is opt-in, not a DNS-rebinding or tenant authorization control. Routes are unauthenticated; deploy only behind trusted single-operator access. Runs are in-process and can be lost on restart; stale rows are flagged after 120 seconds. Synthetic CLI fixture tests cannot validate JMeter's real JMX compatibility. Raw JTL is discarded; request bodies are screened heuristically, not with complete DLP. Performance criteria parser recognizes only explicitly quantified p95/error/throughput phrases; other wording and conflicts are needs-review. Wilson bounds assume independent samples; throughput has no confidence bound and cannot yield a confident pass. No RUM/field Web Vitals, load-scale forecasts, or distributed workers are provided.
+
+25. **Agent surface (1.1.0) trade-offs:** the browser UI remains unauthenticated single-operator — API keys are the only machine boundary; deploys must stay behind trusted access or an outer SSO proxy. `/api/health` and `/api/openapi.json` are public by design (no data). The agent rate limiter is per process, not distributed/durable. `Idempotency-Key` replay is 24h and best-effort under concurrent identical requests (first executor wins; losers replay). The OpenAPI document is hand-maintained — review it when routes change (`src/lib/openapi.ts`). There is no `/api/v1` namespace; `openapi.info.version` is additive-only within 1.x. Scopes are coarse (no per-project key partitioning) and audit rows are written only for mutations and denials (reads are not audited). API keys do not partition by tenant; SSO/RBAC/tenant isolation remains Wave 0 enterprise work.
+26. **Agent key management routes are operator-only by explicit check** (`requireOperator`): a valid agent key receives `403 operator_only` from `/api/agent-keys`. The operator path (no `Authorization` header) is indistinguishable from the UI; there is no second operator factor in this slice.
 
 ---
 

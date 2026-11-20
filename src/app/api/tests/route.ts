@@ -5,6 +5,9 @@ import { buildSystem, callModel, errMsg, parseJson, provenanceOf, redact, resolv
 import { body, fail, ok } from "@/lib/api";
 import { AiTestCaseSchema, AiTestsSchema, AiVisualTestCaseSchema } from "@/lib/schemas";
 import { loadCases } from "@/lib/cases";
+import { authorize } from "@/lib/agentAuth";
+import { beginIdempotency } from "@/lib/idempotency";
+import { NextResponse } from "next/server";
 import { designLocalCases, type BindableControl, type LocalCase } from "@/lib/srs";
 import { designVisualCases, type VisualCaseControl } from "@/lib/visualCases";
 
@@ -12,17 +15,23 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "tests:read");
+  if ("response" in auth) return auth.response;
   const pid = new URL(req.url).searchParams.get("projectId");
   if (!pid) return fail("projectId required");
   return ok(await loadCases(pid));
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "tests:generate");
+  if ("response" in auth) return auth.response;
   try {
     const db = await getDb();
     const b = await body<{ projectId: string; docId?: string; source?: "requirements" | "visual"; screenIds?: string[]; replace?: boolean }>(req);
     const visual = b.source === "visual";
     if (!b.projectId) return fail("projectId required");
+    const idem = await beginIdempotency(req, auth.actor, "POST /api/tests", b);
+    if (idem instanceof NextResponse) return idem;
     if (!visual && !b.docId) return fail("docId required for requirement-driven generation");
 
     const reqs = visual ? [] : await db.select().from(requirements).where(eq(requirements.docId, b.docId!));
@@ -129,13 +138,17 @@ For p_button use hold and for h_button use hover with a bounded millisecond dura
       const links = [...new Set(c.requirementIds)].map((k) => idByKey.get(k)).filter((x): x is string => !!x);
       if (links.length) await db.insert(testTraceability).values(links.map((requirementId) => ({ testCaseId: row.id, requirementId })));
     }
-    return ok({ count: generated.length, model: prov, source: visual ? "visual" : "requirements", replaced: replace, warnings: [...new Set(warnings)] }, 201);
+    const payload = { count: generated.length, model: prov, source: visual ? "visual" : "requirements", replaced: replace, warnings: [...new Set(warnings)] };
+    await idem.store(201, payload);
+    return ok(payload, 201);
   } catch (e) {
     return fail(errMsg(e), 502);
   }
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "delete:artifacts");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const u = new URL(req.url);
   const id = u.searchParams.get("id");

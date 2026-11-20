@@ -3,6 +3,7 @@ import { getDb } from "@/db";
 import { aiProviders, modelRoutes } from "@/db/schema";
 import { AI_PROTOCOLS, ProviderConfigSchema } from "@/lib/aiContract";
 import { body, fail, ok } from "@/lib/api";
+import { authorize } from "@/lib/agentAuth";
 
 type P = { id?: string; name?: string; kind?: string; baseUrl?: string; apiKeyEnv?: string; models?: string[]; enabled?: boolean; config?: unknown };
 
@@ -42,6 +43,8 @@ function clean(b: P) {
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "providers:write");
+  if ("response" in auth) return auth.response;
   try {
     const db = await getDb();
     const v = clean(await body<P>(req));
@@ -54,6 +57,8 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
+  const auth = await authorize(req, "providers:write");
+  if ("response" in auth) return auth.response;
   try {
     const db = await getDb();
     const b = await body<P>(req);
@@ -66,6 +71,8 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "providers:write");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");

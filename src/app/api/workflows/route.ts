@@ -6,11 +6,16 @@ import { body, fail, ok } from "@/lib/api";
 import { loadCases } from "@/lib/cases";
 import { buildWorkflow, NT, validateN8n, type Binding, type ControlRef } from "@/lib/n8n";
 import { AiBindingsSchema } from "@/lib/schemas";
+import { authorize } from "@/lib/agentAuth";
+import { beginIdempotency } from "@/lib/idempotency";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "workflows:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
   const rows = pid ? await db.select().from(workflows).where(eq(workflows.projectId, pid)).orderBy(desc(workflows.updatedAt)) : await db.select().from(workflows).orderBy(desc(workflows.updatedAt));
@@ -18,22 +23,30 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "workflows:write");
+  if ("response" in auth) return auth.response;
   try {
     const db = await getDb();
     const b = await body<{ projectId: string; mode: "generate" | "import" | "blank"; name?: string; caseIds?: string[]; n8n?: unknown }>(req);
     if (!b.projectId) return fail("projectId required");
+    const idem = await beginIdempotency(req, auth.actor, "POST /api/workflows", b);
+    if (idem instanceof NextResponse) return idem;
     const [proj] = await db.select().from(projects).where(eq(projects.id, b.projectId));
     if (!proj) return fail("Project not found", 404);
 
     if (b.mode === "import") {
       const wf = validateN8n(b.n8n);
       const [row] = await db.insert(workflows).values({ projectId: b.projectId, name: b.name || wf.name, n8n: wf as never, provenance: "imported" }).returning();
-      return ok({ id: row.id }, 201);
+      const payload = { id: row.id };
+      await idem.store(201, payload);
+      return ok(payload, 201);
     }
     if (b.mode === "blank") {
       const wf = buildWorkflow({ name: b.name || "New workflow", targetUrl: proj.targetUrl, cases: [], controls: new Map(), provenance: "manual" });
       const [row] = await db.insert(workflows).values({ projectId: b.projectId, name: wf.name, n8n: wf as never, provenance: "manual" }).returning();
-      return ok({ id: row.id }, 201);
+      const payload = { id: row.id };
+      await idem.store(201, payload);
+      return ok(payload, 201);
     }
 
     const { cases } = await loadCases(b.projectId);
@@ -74,7 +87,9 @@ controlId must be one of the supplied control ids, else null. Use assertKind tex
     const wf = buildWorkflow({ name: b.name || `${proj.name} – automation`, targetUrl: proj.targetUrl, cases: caseRefs, controls: refs, bindings, provenance: route.local ? "rasq-local-rules-v1" : prov });
     const unresolved = wf.nodes.filter((n) => n.type === NT.action && n.parameters.anchorStatus === "unresolved").length;
     const [row] = await db.insert(workflows).values({ projectId: b.projectId, name: wf.name, n8n: wf as never, provenance: route.local ? "rasq-local-rules-v1" : prov }).returning();
-    return ok({ id: row.id, nodes: wf.nodes.length, unresolvedAnchors: unresolved, notes }, 201);
+    const payload = { id: row.id, nodes: wf.nodes.length, unresolvedAnchors: unresolved, notes };
+    await idem.store(201, payload);
+    return ok(payload, 201);
   } catch (e) {
     return fail(errMsg(e), 502);
   }
