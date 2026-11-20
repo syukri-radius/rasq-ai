@@ -9,6 +9,7 @@ import { AiBindingsSchema } from "@/lib/schemas";
 import { authorize } from "@/lib/agentAuth";
 import { beginIdempotency } from "@/lib/idempotency";
 import { NextResponse } from "next/server";
+import { projectAllowed, projectDeny, filterProjects } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -18,7 +19,8 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
-  const rows = pid ? await db.select().from(workflows).where(eq(workflows.projectId, pid)).orderBy(desc(workflows.updatedAt)) : await db.select().from(workflows).orderBy(desc(workflows.updatedAt));
+  if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
+  const rows = filterProjects(auth.actor, pid ? await db.select().from(workflows).where(eq(workflows.projectId, pid)).orderBy(desc(workflows.updatedAt)) : await db.select().from(workflows).orderBy(desc(workflows.updatedAt)));
   return ok(rows.map((w) => ({ id: w.id, projectId: w.projectId, name: w.name, version: w.version, provenance: w.provenance, nodes: (w.n8n.nodes as unknown[] | undefined)?.length ?? 0, updatedAt: w.updatedAt })));
 }
 
@@ -29,6 +31,7 @@ export async function POST(req: Request) {
     const db = await getDb();
     const b = await body<{ projectId: string; mode: "generate" | "import" | "blank"; name?: string; caseIds?: string[]; n8n?: unknown }>(req);
     if (!b.projectId) return fail("projectId required");
+    if (!projectAllowed(auth.actor, b.projectId)) return projectDeny();
     const idem = await beginIdempotency(req, auth.actor, "POST /api/workflows", b);
     if (idem instanceof NextResponse) return idem;
     const [proj] = await db.select().from(projects).where(eq(projects.id, b.projectId));

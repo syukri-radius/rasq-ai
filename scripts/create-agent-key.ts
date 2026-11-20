@@ -4,6 +4,7 @@
  *   npx tsx scripts/create-agent-key.ts --name "nightly-ci" --scopes "projects:read,tests:generate,runs:start:dry-run"
  *   npx tsx scripts/create-agent-key.ts --name "auditor" --preset
  *   npx tsx scripts/create-agent-key.ts --name "temp" --ttl-days 30
+ *   npx tsx scripts/create-agent-key.ts --name "proj-bot" --preset --projects <id1>,<id2> --daily-budget 200
  *
  * The plaintext key is printed once. Store it in your secret manager; it cannot be recovered.
  */
@@ -20,7 +21,7 @@ async function main() {
   };
   const name = arg("name");
   if (!name) {
-    console.error("Usage: tsx scripts/create-agent-key.ts --name <label> [--scopes a,b,c] [--preset] [--ttl-days N]");
+    console.error("Usage: tsx scripts/create-agent-key.ts --name <label> [--scopes a,b,c] [--preset] [--ttl-days N] [--projects id1,id2] [--daily-budget N]");
     process.exit(2);
   }
   const preset = args.includes("--preset");
@@ -37,15 +38,24 @@ async function main() {
     process.exit(2);
   }
 
+  const projectIds = arg("projects") ? (arg("projects") ?? "").split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const dailyBudget = arg("daily-budget") ? Number(arg("daily-budget")) : undefined;
+  if (dailyBudget !== undefined && (!Number.isFinite(dailyBudget) || dailyBudget < 1)) {
+    console.error("--daily-budget must be a positive integer");
+    process.exit(2);
+  }
+
   const { key, keyPrefix, keyHash } = generateApiKey();
   const db = await getDb();
   const [row] = await db
     .insert(apiKeys)
-    .values({ name, keyHash, keyPrefix, scopes, expiresAt: ttlDays ? new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000) : null })
+    .values({ name, keyHash, keyPrefix, scopes, projectIds, dailyMutationLimit: dailyBudget ?? null, expiresAt: ttlDays ? new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000) : null })
     .returning({ id: apiKeys.id, createdAt: apiKeys.createdAt });
 
   console.log(`Created API key "${name}" (id ${row.id})`);
   console.log(`Scopes: ${scopes.join(", ")}`);
+  console.log(`Projects: ${projectIds.length ? projectIds.join(", ") : "all (unpartitioned)"}`);
+  console.log(`Daily mutation budget: ${dailyBudget ?? "server default (unlimited)"}`);
   console.log(`Expires: ${ttlDays ? `in ${ttlDays} days` : "never"}`);
   console.log("");
   console.log(key);

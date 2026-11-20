@@ -47,7 +47,7 @@ function toolResult(result: { ok: boolean; status: number; body: string }) {
 
 const idemField = { idempotency_key: z.string().min(8).max(200).optional().describe("Optional Idempotency-Key (8–200 chars) to make retries of this mutating call safe; a 409 means the payload drifted for that key.") };
 
-const server = new McpServer({ name: "rasq-ai", version: "1.2.0" }, { instructions: "Read and limited safe-generation access to a RASQ-Ai QA automation server via its HTTP API. All calls are authenticated with the operator-issued key in RASQ_API_KEY; the server enforces scopes and audits mutations. No destructive, attending, or load-generating operations are exposed." });
+const server = new McpServer({ name: "rasq-ai", version: "1.3.0" }, { instructions: "Read and limited safe-generation access to a RASQ-Ai QA automation server via its HTTP API. All calls are authenticated with the operator-issued key in RASQ_API_KEY; the server enforces scopes and audits mutations. No destructive, attending, or load-generating operations are exposed." });
 
 server.registerTool("rasqai_health", {
   title: "Health check",

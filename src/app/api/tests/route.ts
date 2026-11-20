@@ -10,6 +10,7 @@ import { beginIdempotency } from "@/lib/idempotency";
 import { NextResponse } from "next/server";
 import { designLocalCases, type BindableControl, type LocalCase } from "@/lib/srs";
 import { designVisualCases, type VisualCaseControl } from "@/lib/visualCases";
+import { projectAllowed, projectDeny } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const pid = new URL(req.url).searchParams.get("projectId");
   if (!pid) return fail("projectId required");
+  if (!projectAllowed(auth.actor, pid)) return projectDeny();
   return ok(await loadCases(pid));
 }
 
@@ -30,6 +32,7 @@ export async function POST(req: Request) {
     const b = await body<{ projectId: string; docId?: string; source?: "requirements" | "visual"; screenIds?: string[]; replace?: boolean }>(req);
     const visual = b.source === "visual";
     if (!b.projectId) return fail("projectId required");
+    if (!projectAllowed(auth.actor, b.projectId)) return projectDeny();
     const idem = await beginIdempotency(req, auth.actor, "POST /api/tests", b);
     if (idem instanceof NextResponse) return idem;
     if (!visual && !b.docId) return fail("docId required for requirement-driven generation");

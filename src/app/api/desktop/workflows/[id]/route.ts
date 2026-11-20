@@ -3,6 +3,7 @@ import { body, fail, ok, type Params } from "@/lib/api";
 import { DesktopTargetSchema, type DesktopTarget } from "@/lib/desktopContract";
 import { compileStoredWorkflow } from "@/lib/desktopService";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny, workflowProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,10 @@ export async function POST(req: Request, { params }: Params<"id">) {
     const { id } = await params;
     const input = await body<{ target?: Partial<DesktopTarget> }>(req);
     const target = DesktopTargetSchema.partial().parse(input.target ?? {});
-    const { compilation, bundle } = await compileStoredWorkflow(await getDb(), id, target);
+    const db = await getDb();
+    const pid = await workflowProjectId(db, id);
+    if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
+    const { compilation, bundle } = await compileStoredWorkflow(db, id, target);
     return ok({
       manifest: compilation.manifest,
       diagnostics: compilation.diagnostics,
@@ -32,6 +36,9 @@ export async function GET(req: Request, { params }: Params<"id">) {
   if ("response" in auth) return auth.response;
   try {
     const { id } = await params;
+    const db = await getDb();
+    const pid = await workflowProjectId(db, id);
+    if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
     const url = new URL(req.url);
     const target = DesktopTargetSchema.parse({
       applicationName: url.searchParams.get("applicationName") ?? "",
@@ -39,7 +46,7 @@ export async function GET(req: Request, { params }: Params<"id">) {
       displayId: url.searchParams.get("displayId") ?? "",
       requireFocus: url.searchParams.get("requireFocus") !== "false",
     });
-    const { bundle } = await compileStoredWorkflow(await getDb(), id, target);
+    const { bundle } = await compileStoredWorkflow(db, id, target);
     if (!bundle) return fail("Desktop workflow has blocking compiler diagnostics.", 422);
     return new Response(new Uint8Array(bundle.bytes), {
       headers: {

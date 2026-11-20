@@ -7,6 +7,7 @@ import { fail, ok } from "@/lib/api";
 import { AiRequirementsSchema } from "@/lib/schemas";
 import { classify, parseRequirements, type ParsedReq } from "@/lib/srs";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny, docProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -16,6 +17,7 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
+  if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
   const docs = pid ? await db.select().from(requirementDocs).where(eq(requirementDocs.projectId, pid)).orderBy(desc(requirementDocs.createdAt)) : [];
   const reqs = docs.length ? await db.select().from(requirements).where(inArray(requirements.docId, docs.map((d) => d.id))) : [];
   return ok({ docs: docs.map((d) => ({ ...d, text: undefined, chars: d.text.length })), requirements: reqs });
@@ -40,6 +42,7 @@ export async function POST(req: Request) {
     const form = await req.formData();
     const projectId = String(form.get("projectId") ?? "");
     if (!projectId) return fail("projectId required");
+    if (!projectAllowed(auth.actor, projectId)) return projectDeny();
     const file = form.get("file");
     let text = String(form.get("text") ?? "");
     let name = String(form.get("name") ?? "Pasted SRS");
@@ -93,6 +96,8 @@ export async function DELETE(req: Request) {
   const db = await getDb();
   const id = new URL(req.url).searchParams.get("docId");
   if (!id) return fail("docId required");
+  const pid = await docProjectId(db, id);
+  if (!pid || !projectAllowed(auth.actor, pid)) return projectDeny();
   await db.delete(requirementDocs).where(eq(requirementDocs.id, id));
   return ok();
 }

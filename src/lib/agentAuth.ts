@@ -5,6 +5,7 @@ import { getDb, type Db } from "@/db";
 import { apiKeys } from "@/db/schema";
 import { fail } from "@/lib/api";
 import { recordAudit, clientIp } from "@/lib/audit";
+import { consumeAgentMutationBudget } from "@/lib/rateLimit";
 
 /**
  * External agent (machine) access for RASQ-Ai.
@@ -71,7 +72,7 @@ export const RECOMMENDED_AGENT_SCOPES: ApiKeyScope[] = [
 
 export type Actor =
   | { kind: "operator" }
-  | { kind: "agent"; id: string; name: string; keyPrefix: string; scopes: string[] };
+  | { kind: "agent"; id: string; name: string; keyPrefix: string; scopes: string[]; projectIds: string[]; dailyMutationLimit: number | null };
 
 export function hashApiKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
@@ -123,23 +124,16 @@ export async function resolveActor(req: Request, existingDb?: Db): Promise<{ act
   } catch {
     /* non-fatal */
   }
-  return { actor: { kind: "agent", id: row.id, name: row.name, keyPrefix: row.keyPrefix, scopes: row.scopes } };
+  return { actor: { kind: "agent", id: row.id, name: row.name, keyPrefix: row.keyPrefix, scopes: row.scopes, projectIds: Array.isArray(row.projectIds) ? row.projectIds : [], dailyMutationLimit: row.dailyMutationLimit ?? null } };
 }
 
-/** In-memory fixed-window rate limiter (per process, best-effort). Protects AI-backed routes from agent runaway loops. */
-const WINDOW_MS = 60_000;
-const DEFAULT_LIMIT = Number(process.env.RASQ_AGENT_RATE_LIMIT ?? 120) || 120;
-const buckets = new Map<string, { windowStart: number; count: number }>();
-export function agentRateLimitOk(keyId: string): boolean {
-  const now = Date.now();
-  const bucket = buckets.get(keyId);
-  if (!bucket || now - bucket.windowStart >= WINDOW_MS) {
-    buckets.set(keyId, { windowStart: now, count: 1 });
-    return true;
-  }
-  bucket.count += 1;
-  return bucket.count <= DEFAULT_LIMIT;
-}
+/**
+ * Fixed-window rate limiting is database-backed (usage_counters table) so it holds across
+ * restarts and every code path in this single-node deployment. The per-minute budget defaults
+ * to 120 (RASQ_AGENT_RATE_LIMIT); per-key daily mutation budgets default to the server-wide
+ * RASQ_AGENT_DAILY_MUTATIONS (0 = unlimited) and may be overridden per key.
+ * Fail-closed: if the counter cannot be written, the mutation is refused with 503.
+ */
 
 const actionLabel = (req: Request) => `${req.method} ${new URL(req.url).pathname}`;
 
@@ -156,9 +150,19 @@ export async function authorize(req: Request, scope: ApiKeyScope): Promise<{ act
   const action = actionLabel(req);
   const mutation = req.method !== "GET" && req.method !== "HEAD";
   if (actor.kind === "agent") {
-    if (mutation && !agentRateLimitOk(actor.id)) {
-      await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: "rate limit exceeded", ip: clientIp(req) });
-      return { response: fail("Rate limit exceeded; slow down or contact the operator.", 429, "rate_limited") };
+    if (mutation) {
+      try {
+        const budget = await consumeAgentMutationBudget(await getDb(), actor.id, { dailyMutationLimit: actor.dailyMutationLimit });
+        if (!budget.ok) {
+          const day = budget.reason === "day";
+          await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: day ? "daily mutation budget exceeded" : "rate limit exceeded", ip: clientIp(req) });
+          return { response: fail(day ? "Daily mutation budget exceeded. Ask the operator to raise it, or wait for the UTC day to roll over." : "Rate limit exceeded; slow down or contact the operator.", 429, day ? "daily_budget_exceeded" : "rate_limited") };
+        }
+      } catch (e) {
+        console.warn("agent rate limiter unavailable:", e instanceof Error ? e.message : e);
+        await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: "rate limiter unavailable (fail-closed)", ip: clientIp(req) });
+        return { response: fail("Rate limiter unavailable; mutation refused (fail-closed). Retry later.", 503, "rate_limiter_unavailable") };
+      }
     }
     if (!actor.scopes.includes(scope)) {
       await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: `missing scope ${scope}`, ip: clientIp(req) });

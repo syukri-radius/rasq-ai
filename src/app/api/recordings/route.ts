@@ -7,6 +7,7 @@ import { recordings } from "@/db/schema";
 import { fail, ok } from "@/lib/api";
 import { DATA_DIR } from "@/lib/runner";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny, filterProjects } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,11 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
-  return ok(pid ? await db.select().from(recordings).where(eq(recordings.projectId, pid)).orderBy(desc(recordings.createdAt)) : await db.select().from(recordings).orderBy(desc(recordings.createdAt)));
+  if (pid) {
+    if (!projectAllowed(auth.actor, pid)) return projectDeny();
+    return ok(await db.select().from(recordings).where(eq(recordings.projectId, pid)).orderBy(desc(recordings.createdAt)));
+  }
+  return ok(filterProjects(auth.actor, await db.select().from(recordings).orderBy(desc(recordings.createdAt))));
 }
 
 export async function POST(req: Request) {
@@ -26,6 +31,7 @@ export async function POST(req: Request) {
   const file = form.get("file");
   const projectId = String(form.get("projectId") ?? "");
   if (!(file instanceof File) || !projectId) return fail("file and projectId are required");
+  if (!projectAllowed(auth.actor, projectId)) return projectDeny();
   const buf = Buffer.from(await file.arrayBuffer());
   const dir = path.join(DATA_DIR, "recordings");
   fs.mkdirSync(dir, { recursive: true });

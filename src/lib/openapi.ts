@@ -32,7 +32,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "RASQ-Ai API",
-    version: "1.2.0",
+    version: "1.3.0",
     description:
       "Trustworthy visual test automation: optical capture, requirements traceability, test design, workflow execution and evidence-based reporting. External agents authenticate with scoped API keys (see /AGENT_GUIDE.md or the repository's AGENT_GUIDE.md). The browser UI is a single-operator surface; agents must never rely on unauthenticated access.",
     contact: { name: "RASQ-Ai operator" },
@@ -52,6 +52,7 @@ export const openApiDocument = {
     { name: "desktop", description: "Attended desktop agent control plane" },
     { name: "agent-keys", description: "API key management (operator only)" },
     { name: "webhooks", description: "Outbound webhook endpoints for terminal run events (operator only)" },
+    { name: "audit", description: "Audit log query and export (operator only)" },
   ],
   components: {
     securitySchemes: {
@@ -222,9 +223,28 @@ export const openApiDocument = {
     "/api/webhooks/deliveries": {
       get: { tags: ["webhooks"], summary: "Delivery attempts, newest 100 (query ?webhookId= to scope; operator only)", security: bearer, responses: { "200": { description: "Delivery history" }, "403": errRes("Operator only") } },
     },
+    "/api/audit": {
+      get: {
+        tags: ["audit"],
+        summary: "Query or export the audit log (operator only). Filters: actorType, actorId, status, action (substring), from/to (ISO 8601), limit (1–1000, default 100), offset, format=json|csv (CSV capped at 10,000 rows; formula-injection-safe)",
+        security: bearer,
+        parameters: [
+          { name: "actorType", in: "query", required: false, schema: { type: "string", enum: ["operator", "agent", "unauthenticated"] } },
+          { name: "actorId", in: "query", required: false, schema: { type: "string" } },
+          { name: "status", in: "query", required: false, schema: { type: "string", enum: ["ok", "denied"] } },
+          { name: "action", in: "query", required: false, schema: { type: "string" } },
+          { name: "from", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "to", in: "query", required: false, schema: { type: "string", format: "date-time" } },
+          { name: "limit", in: "query", required: false, schema: { type: "integer", default: 100, maximum: 1000 } },
+          { name: "offset", in: "query", required: false, schema: { type: "integer", default: 0 } },
+          { name: "format", in: "query", required: false, schema: { type: "string", enum: ["json", "csv"], default: "json" } },
+        ],
+        responses: { "200": { description: "Matching audit rows plus total" }, "400": errRes("Invalid filter"), "403": errRes("Operator only") },
+      },
+    },
     "/api/agent-keys": {
       get: { tags: ["agent-keys"], summary: "List key metadata (operator only; never plaintext)", security: bearer, responses: { "200": { description: "Key list" }, "403": errRes("Operator only") } },
-      post: { tags: ["agent-keys"], summary: "Mint a key; plaintext returned once (operator only)", security: bearer, requestBody: { required: true, content: json({ type: "object", required: ["name", "scopes"], properties: { name: { type: "string" }, scopes: { type: "array", items: { type: "string" } }, ttlDays: { type: "integer" } } }) }, responses: { "201": { description: "Created; store the key now" }, "403": errRes("Operator only") } },
+      post: { tags: ["agent-keys"], summary: "Mint a key; plaintext returned once (operator only)", security: bearer, requestBody: { required: true, content: json({ type: "object", required: ["name", "scopes"], properties: { name: { type: "string" }, scopes: { type: "array", items: { type: "string" } }, ttlDays: { type: "integer" }, projectIds: { type: "array", items: { type: "string" }, description: "Restrict the key to these projects; empty/omitted = all projects (no isolation)" }, dailyMutationLimit: { type: "integer", minimum: 1, nullable: true, description: "Max mutating calls per UTC day; null = RASQ_AGENT_DAILY_MUTATIONS default (0 = unlimited)" } } }) }, responses: { "201": { description: "Created; store the key now" }, "403": errRes("Operator only") } },
       delete: { tags: ["agent-keys"], summary: "Revoke a key by id (query ?id=, operator only)", security: bearer, responses: { "200": { description: "Revoked" }, "403": errRes("Operator only"), "404": errRes("Not found") } },
     },
   },
