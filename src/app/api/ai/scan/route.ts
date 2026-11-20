@@ -3,6 +3,7 @@ import { buildSystem, callModel, errMsg, parseJson, provenanceOf, resolveRoute, 
 import { body, fail, ok } from "@/lib/api";
 import { AiScanSchema } from "@/lib/schemas";
 import { CONTROL_TYPES } from "@/lib/types";
+import { authorize } from "@/lib/agentAuth";
 
 export const maxDuration = 300;
 
@@ -10,6 +11,8 @@ type Cand = { id: string; x: number; y: number; w: number; h: number; type: stri
 
 /** Enriches client-side perception candidates with semantic labels from the operator-selected multimodal model. */
 export async function POST(req: Request) {
+  const auth = await authorize(req, "ai:scan");
+  if ("response" in auth) return auth.response;
   const b = await body<{ name?: string; width: number; height: number; imageDataUrl: string; candidates: Cand[] }>(req);
   if (!b.imageDataUrl || !b.width || !b.height || !Array.isArray(b.candidates)) return fail("imageDataUrl, width, height and candidates are required");
   try {

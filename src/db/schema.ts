@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique, index } from "drizzle-orm/sqlite-core";
 import type { Category, Priority, TestStep } from "@/lib/types";
 import type { ProviderConfig } from "@/lib/aiContract";
 import type { DesktopCapabilities, DesktopDisplay, DesktopPermissions, DesktopTarget } from "@/lib/desktopContract";
@@ -11,6 +11,56 @@ const createdAt = () =>
   integer("created_at", { mode: "timestamp_ms" })
     .notNull()
     .$defaultFn(() => new Date());
+
+/** External agent (machine) credentials. Only SHA-256 hashes of the random key body are stored; the plaintext is shown once at creation. */
+export const apiKeys = sqliteTable(
+  "api_keys",
+  {
+    id: pk(),
+    name: text("name").notNull(),
+    keyHash: text("key_hash").notNull(),
+    /** First characters of the plaintext key (e.g. "rasq_7f3a…"); safe to display, never sufficient to authenticate. */
+    keyPrefix: text("key_prefix").notNull(),
+    scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    createdAt: createdAt(),
+  },
+  (t) => [unique("api_keys_key_hash_unique").on(t.keyHash)],
+);
+
+/** Append-only audit trail. Rows are never updated or deleted by the application. */
+export const auditLog = sqliteTable(
+  "audit_log",
+  {
+    id: pk(),
+    actorType: text("actor_type").notNull(), // operator | agent
+    actorId: text("actor_id"), // api_keys.id when actorType = agent
+    actorName: text("actor_name").notNull().default(""),
+    action: text("action").notNull(), // e.g. "POST /api/tests"
+    status: text("status").notNull(), // ok | denied
+    detail: text("detail").notNull().default(""),
+    ip: text("ip").notNull().default(""),
+    createdAt: createdAt(),
+  },
+  (t) => [index("audit_log_created_at_idx").on(t.createdAt)],
+);
+
+/** Idempotency-Key replay records for mutating agent/operator calls. Entries older than 24h are purged opportunistically. */
+export const idempotencyKeys = sqliteTable(
+  "idempotency_keys",
+  {
+    actor: text("actor").notNull(), // "operator" or the agent key id
+    key: text("key").notNull(),
+    endpoint: text("endpoint").notNull(),
+    bodyHash: text("body_hash").notNull(),
+    status: integer("status").notNull(),
+    response: text("response").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.actor, t.key] })],
+);
 
 export const projects = sqliteTable("projects", {
   id: pk(),

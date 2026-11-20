@@ -1,7 +1,10 @@
 import { body, fail } from "@/lib/api";
 import { captureScreenshot } from "@/lib/runner";
+import { authorize } from "@/lib/agentAuth";
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "capture:run");
+  if ("response" in auth) return auth.response;
   const b = await body<{ url?: string; width?: number; height?: number }>(req);
   if (!b.url) return fail("url required");
   try {

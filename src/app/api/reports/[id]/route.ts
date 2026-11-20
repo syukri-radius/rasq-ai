@@ -2,10 +2,13 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { reports } from "@/db/schema";
 import type { Params } from "@/lib/api";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: Params<"id">) {
+export async function GET(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "reports:read");
+  if ("response" in auth) return auth.response;
   const { id } = await params;
   const db = await getDb();
   const [r] = await db.select().from(reports).where(eq(reports.id, id));

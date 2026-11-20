@@ -6,16 +6,21 @@ import { getDb } from "@/db";
 import { recordings } from "@/db/schema";
 import { fail, ok } from "@/lib/api";
 import { DATA_DIR } from "@/lib/runner";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "screens:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
   return ok(pid ? await db.select().from(recordings).where(eq(recordings.projectId, pid)).orderBy(desc(recordings.createdAt)) : await db.select().from(recordings).orderBy(desc(recordings.createdAt)));
 }
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "screens:write");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const form = await req.formData();
   const file = form.get("file");

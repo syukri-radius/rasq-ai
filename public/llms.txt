@@ -1,0 +1,48 @@
+# RASQ-Ai
+
+> Trustworthy visual test automation: zero-DOM optical capture, requirements-to-test traceability, execution evidence, and evidence-based reporting. This file is for external AI agents that want to USE the running application. For agents editing the source code, see MASTER_PROMPT.md / CONTEXT_MEMORY.md instead.
+
+## Authentication
+
+All endpoints except `GET /api/health` and `GET /api/openapi.json` require either the single-operator browser session (same-origin UI) or, for external agents, a scoped API key:
+
+```
+Authorization: Bearer rasq_<random>
+```
+
+Keys are created by the operator via `POST /api/agent-keys` or `npm run agent:key`, stored as SHA-256 hashes, shown once, revocable, optionally expiring. Each key carries scopes; requests without a required scope get `403 insufficient_scope`. An invalid/revoked/expired key gets `401 invalid_api_key` and is never downgraded to operator access.
+
+## Discovery
+
+- OpenAPI 3.1: `GET /api/openapi.json` (public) — every operation lists its `x-rasq-scope`.
+- Full guide with curl recipes, error codes and safety rules: `AGENT_GUIDE.md` at the repository root.
+
+## Capability map (scopes)
+
+Read: projects:read, screens:read, requirements:read, tests:read, workflows:read, runs:read, reports:read, performance:read, settings:read, desktop:read.
+Generate: projects:write, screens:write, requirements:write, tests:generate, workflows:write, reports:generate, settings:write, providers:write, ai:scan, capture:run, performance:plan.
+Execution (grant deliberately): runs:start:dry-run, runs:start:playwright, performance:load, desktop:attend, desktop:confirm, desktop:revoke.
+Deletion (grant deliberately): delete:artifacts.
+
+Recommended starting set: projects:read, screens:read, requirements:read, tests:read, tests:generate, workflows:read, workflows:write, runs:read, runs:start:dry-run, reports:read.
+
+## Canonical pipeline
+
+1. `GET /api/projects` → pick a project id.
+2. `POST /api/requirements` (upload/paste SRS) or `POST /api/capture` + screen analysis for visual anchors.
+3. `POST /api/tests` → generate traceable cases. NOTE: SRS generation REPLACES the project's case set unless `replace:false`. Visual generation appends.
+4. `POST /api/workflows` ({ projectId, mode:"generate" }) → runnable n8n-shaped workflow.
+5. `POST /api/runs` { workflowId, mode:"dry-run" } → validates structure only, executes nothing. Poll `GET /api/runs/{id}` until `status` is terminal.
+6. `POST /api/runs` { workflowId, mode:"playwright" } → real browser execution (needs `runs:start:playwright`).
+7. `POST /api/reports` → Markdown report built only from recorded data.
+
+## Rules agents must follow
+
+- Dry-run first; real execution is an explicit operator decision.
+- `manualReview` assertions yield `needs-review`, never a pass.
+- Never invent requirement IDs, selectors, or outcomes; use only returned artifacts.
+- Desktop (RobotJS) input is attended: preflight → `awaiting-operator-confirmation` → operator confirms. Never confirm on an operator's behalf unless granted the desktop:confirm scope, and only with explicit instruction.
+- Load tests (`performance:load`) only against targets on `RASQ_JMETER_ALLOWED_ORIGINS`, and only when authorized.
+- Send `Idempotency-Key` on POST /api/runs, /api/tests, /api/workflows; replays return the stored response with `idempotent-replay: true`.
+- Errors are `{ "error": string, "code"?: string }`. Back off on `429 rate_limited`; do not retry `403 insufficient_scope` without an operator granting the scope.
+- Generated artifacts are not execution evidence. Reports distinguish them; keep that distinction in your outputs.

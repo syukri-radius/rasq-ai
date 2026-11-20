@@ -5,11 +5,14 @@ import { buildSystem, callModel, errMsg, parseJson, provenanceOf, resolveRoute, 
 import { body, fail, ok } from "@/lib/api";
 import { loadCases } from "@/lib/cases";
 import { AiReportSchema } from "@/lib/schemas";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "reports:read");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
   const rows = pid ? await db.select().from(reports).where(eq(reports.projectId, pid)).orderBy(desc(reports.createdAt)) : await db.select().from(reports).orderBy(desc(reports.createdAt));
@@ -21,6 +24,8 @@ const table = (o: Record<string, number>) => (Object.keys(o).length ? Object.ent
 const cell = (s: string) => s.replace(/\|/g, "/").replace(/[\r\n]+/g, " ");
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "reports:generate");
+  if ("response" in auth) return auth.response;
   try {
     const db = await getDb();
     const b = await body<{ projectId: string }>(req);
@@ -126,6 +131,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const auth = await authorize(req, "delete:artifacts");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");

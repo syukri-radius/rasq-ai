@@ -8,6 +8,7 @@ import { body, fail, ok } from "@/lib/api";
 import { DesktopTargetSchema, DESKTOP_LIMITS, DESKTOP_PROTOCOL_VERSION } from "@/lib/desktopContract";
 import { compileStoredWorkflow, desktopBundlePath, failStaleDesktopRuns } from "@/lib/desktopService";
 import type { N8nWorkflow } from "@/lib/n8n";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 const CreateRunSchema = z.object({
@@ -18,6 +19,8 @@ const CreateRunSchema = z.object({
 }).strict();
 
 export async function POST(req: Request) {
+  const auth = await authorize(req, "desktop:attend");
+  if ("response" in auth) return auth.response;
   const db = await getDb();
   try {
     const input = CreateRunSchema.parse(await body(req));

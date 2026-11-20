@@ -2,10 +2,13 @@ import { getDb } from "@/db";
 import { body, fail, ok, type Params } from "@/lib/api";
 import { DesktopTargetSchema, type DesktopTarget } from "@/lib/desktopContract";
 import { compileStoredWorkflow } from "@/lib/desktopService";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "desktop:attend");
+  if ("response" in auth) return auth.response;
   try {
     const { id } = await params;
     const input = await body<{ target?: Partial<DesktopTarget> }>(req);
@@ -25,6 +28,8 @@ export async function POST(req: Request, { params }: Params<"id">) {
 }
 
 export async function GET(req: Request, { params }: Params<"id">) {
+  const auth = await authorize(req, "desktop:read");
+  if ("response" in auth) return auth.response;
   try {
     const { id } = await params;
     const url = new URL(req.url);

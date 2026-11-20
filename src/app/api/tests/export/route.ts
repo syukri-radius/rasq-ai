@@ -1,11 +1,14 @@
 import { fail } from "@/lib/api";
 import { loadCases } from "@/lib/cases";
+import { authorize } from "@/lib/agentAuth";
 
 export const dynamic = "force-dynamic";
 
 const q = (s: unknown) => `"${String(s ?? "").replace(/"/g, '""')}"`;
 
 export async function GET(req: Request) {
+  const auth = await authorize(req, "tests:read");
+  if ("response" in auth) return auth.response;
   const u = new URL(req.url);
   const pid = u.searchParams.get("projectId");
   if (!pid) return fail("projectId required");
