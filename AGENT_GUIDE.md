@@ -35,8 +35,9 @@ Authorization: Bearer rasq_<random>
 - No `Authorization` header → treated as the local single-operator session (browser UI). Agents must not depend on this.
 - Malformed/unknown/revoked/expired key → `401 invalid_api_key`.
 - Valid key without the route's scope → `403 insufficient_scope` (machine-readable `code`).
-- Mutations over the per-process budget (default 120/min, `RASQ_AGENT_RATE_LIMIT`) → `429 rate_limited`.
-- Every mutating call writes `audit_log`: actor type/id/name, `METHOD /path`, ok/denied, client IP.
+- Mutations over the budget → `429 rate_limited` (per-minute fixed window, default 120/min, `RASQ_AGENT_RATE_LIMIT`, database-backed via `usage_counters`) or `429 daily_budget_exceeded` (per-key per-UTC-day budget: `dailyMutationLimit` at mint time, falling back to `RASQ_AGENT_DAILY_MUTATIONS`, 0 = unlimited).
+- If the rate limiter cannot be written to the database, mutations are refused fail-closed: `503 rate_limiter_unavailable`.
+- Every mutating call writes `audit_log`: actor type/id/name, `METHOD /path`, ok/denied, client IP. Retention is configurable (`RASQ_AUDIT_RETENTION_DAYS`, default 180) and deletions are irreversible — see §9 and GUARDRAILS.md.
 
 ## 3. Discover the API
 
@@ -44,6 +45,8 @@ Authorization: Bearer rasq_<random>
 - **Error envelope**: `{ "error": string, "code"?: string }`. `code` is stable for machines; `error` is human-readable.
 - **`Idempotency-Key`** header is honored on `POST /api/runs`, `POST /api/tests`, `POST /api/workflows` (agent or operator). Replay rules in §6.
 - **Webhooks** — terminal events can be pushed to your receiver; see §10. **MCP** — the same surface is available as MCP stdio tools; see §11.
+- **Project partition** — operator-issued keys may carry a `project_ids` allowlist; foreign-project artifacts answer `404 not_found` and list endpoints silently filter. See §12.
+- **Audit export** — `GET /api/audit?format=csv` gives operators the full trail; see §13.
 
 ## 4. Scope catalog
 
@@ -114,7 +117,9 @@ On `POST /api/runs`, `POST /api/tests`, `POST /api/workflows`:
 | 404 | `not_found` | Artifact missing or wrong id |
 | 409 | `idempotency_conflict` | Key reused with a different body; use a fresh key |
 | 413 | — | Upload too large (SRS limit 15 MB) |
-| 429 | `rate_limited` | Back off exponentially |
+| 429 | `rate_limited`, `daily_budget_exceeded` | Back off; daily budget rolls over at 00:00 UTC |
+| 503 | `rate_limiter_unavailable` | Server cannot measure mutations; retry later (fail-closed) |
+| 403 | `scoped_key` | Your key is partitioned and cannot act outside its projects |
 | 502 | — | Upstream AI/provider failure; retry with jitter, bounded |
 
 ## 8. Safety rules an agent must not violate
@@ -131,6 +136,8 @@ On `POST /api/runs`, `POST /api/tests`, `POST /api/workflows`:
 ## 9. What this does not (yet) give you
 
 - Webhooks push **terminal events only** (no step-level streaming) and delivery is best-effort in-process: a receiver outage never blocks or fails the run, and retries stop after three attempts. There is no SSE stream.
+- The audit trail is retention-bound: `RASQ_AUDIT_RETENTION_DAYS` (default 180) deletes old rows on the sweep (`npm run retention`, also opportunistic via `GET /api/audit`). If your compliance regime needs immutable evidence, export CSV before it expires and mirror it to WORM storage.
+- Project partitioning is tenancy-lite, not tenant isolation: deployment-global surfaces (settings, providers, the desktop device protocol, capture/`ai:scan` which carry no project id, API-key and webhook management) are intentionally unpartitioned.
 - No `/api/v1` namespace — paths are `/api/...` with additive-only changes inside `openapi.info.version` 1.x.
 - No multi-tenancy, no per-project key partitioning; a key can act on every project unless the operator names it down.
 - In-process runners are not a durable queue; a server restart can strand a run. Stale desktop and Playwright runs (no progress ≥30 min) and stale performance runs (>120 s) are marked `error` automatically when a list/poll endpoint is next hit, and the terminal webhook fires for them.
@@ -187,10 +194,36 @@ MCP client config (Claude Desktop and compatible):
     "env": { "RASQ_AI_URL": "http://127.0.0.1:3000", "RASQ_API_KEY": "rasq_..." } } } }
 ```
 
-## 12. Decision record (why it is built this way)
+## 12. Project-scoped keys (tenancy-lite) and the audit API (1.3.0)
+
+**Partitioning.** At mint time the operator may pass `projectIds` (HTTP) or `--projects id1,id2` (CLI) and/or `dailyMutationLimit` (`--daily-budget`). Empty/omitted = act on all projects (pre-1.3.0 behavior). Rules:
+
+- Reads of foreign-project artifacts answer `404 not_found` (never 403), so partitions do not enumerate which projects exist.
+- List endpoints (`/api/projects`, screens, recordings, workflows, reports, runs, tests, requirements) silently filter to your projects.
+- Object-addressed mutations on foreign projects (screens/workflows/reports/runs/performance plans and runs/desktop dispatch/confirm/cancel) answer 404 before doing any work.
+- `POST /api/projects` is rejected for partitioned keys with `403 scoped_key` — a key cannot widen its own world.
+- Unpartitioned surfaces by design: `settings`, `providers`, `agent-keys`, `webhooks`, `audit`, the desktop device protocol (`/api/desktop/agents/*`), `capture`, `ai:scan` (no project id travels through them).
+- Partition checks run in each handler after authorization; they are not a middleware illusion — verify behavior with the governance test suite (`tests/governance.test.ts`).
+
+**Audit API.** `GET /api/audit` (operator browser session or operator credentials — agents can never call it):
+
+```bash
+curl -s "http://localhost:3000/api/audit?actorType=agent&status=denied&limit=50" | jq '.rows[] | {createdAt, actorName, action, detail}'
+curl -s "http://localhost:3000/api/audit?from=2026-11-01T00:00:00Z&format=csv" -o rasq-ai-audit.csv
+```
+
+Filters: `actorType`, `actorId`, `status` (`ok`|`denied`), `action` (case-insensitive substring), `from`/`to` (ISO 8601), `limit` (≤1000), `offset`, `format=json|csv` (CSV ≤10,000 rows; cells that start with `= + - @` are prefixed with `'` against spreadsheet formula injection). Responses are `{ rows, total, limit, offset }` (JSON) or the CSV with `x-total-count`/`x-returned-count` headers. Rows are append-only; retention deletes them after `RASQ_AUDIT_RETENTION_DAYS`.
+
+**Retention.** `npm run retention` (or the throttled opportunistic sweep inside `GET /api/audit`) prunes `audit_log` (180d), `idempotency_keys` (25h), `webhook_deliveries` (90d), and `usage_counters` (minute 2d / day 400d). Tune via `RASQ_AUDIT_RETENTION_DAYS`, `RASQ_WEBHOOK_DELIVERY_RETENTION_DAYS`, `RASQ_IDEMPOTENCY_RETENTION_HOURS`. Deletion is irreversible; export first if you need the evidence.
+
+## 13. Decision record (why it is built this way)
 
 - **Why API keys and not full SSO/RBAC now?** SSO/tenant isolation is Wave 0 of `ENTERPRISE_ROADMAP.md`. Keys deliver scoped, auditable machine access with minimal surface change and no UI rewrite; browser UI stays single-operator and documented as such.
 - **Why scopes on existing routes instead of a new `/api/v1` facade?** One handler per operation, no drift; the OpenAPI document is the contract, versioned via `info.version`. A parallel facade would fork behavior.
 - **Why fail closed on bad `Authorization` headers instead of ignoring them?** Silent downgrade to operator (the pre-1.1.0 status quo) is the worst of both worlds.
 - **Why is MCP a thin stdio adapter over HTTP instead of a second auth path?** It wraps exactly this scope/audit/idempotency layer; building the layer first means the MCP server is a thin adapter, not a second security boundary.
+- **Why partition with 404 instead of 403?** Existence denial: a partitioned key must not enumerate foreign project ids. `scoped_key` is reserved for the one case where the key may not widen its own world (`POST /api/projects`).
+- **Why is the rate limiter database-backed and fail-closed now?** An AI agent runaway loop spends real money; over-limit must be observable (429 + audit row) and the limiter itself must not be the weak link. In-process counters vanished on restart; missing counters now refuse mutations with 503 rather than letting an unmeasured agent run. This is deliberately not a distributed limiter — see GUARDRAILS.md.
+- **Why retention at all?** Append-only stores grow forever; unbounded growth is a governance failure (backups, query latency, privacy exposure). Deleting audit rows is irreversible, so the window and the CSV export exist together.
+- **Why not full RBAC/SSO in this wave?** See GUARDRAILS.md — identity is one guardrail of many; tenant isolation belongs with SSO (Wave 0), project partitioning covers the machine-key case honestly today.
 - **Trade-offs accepted:** additive-only API stability over deep versioning; operator-bypass auth for the UI over breaking the app; best-effort in-memory rate limiting over a distributed limiter; hand-maintained OpenAPI over codegen drift (enforced by review, not tooling).

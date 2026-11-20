@@ -14,6 +14,10 @@ const CreateKeySchema = z
     scopes: z.array(z.string()).min(1).max(API_KEY_SCOPES.length),
     /** Days until the key expires; omit for a non-expiring key. */
     ttlDays: z.number().int().min(1).max(3650).optional(),
+    /** Restrict the key to these project ids; omit/empty = all projects. */
+    projectIds: z.array(z.string().trim().min(1).max(64)).max(500).optional(),
+    /** Max mutating calls per UTC day; omit/null = the server default (RASQ_AGENT_DAILY_MUTATIONS, 0 = unlimited). */
+    dailyMutationLimit: z.number().int().min(1).max(1_000_000).nullable().optional(),
   })
   .strict();
 
@@ -22,7 +26,7 @@ export async function GET(req: Request) {
   const auth = await requireOperator(req, "API key management");
   if ("response" in auth) return auth.response;
   const db = await getDb();
-  const rows = await db.select({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix, scopes: apiKeys.scopes, lastUsedAt: apiKeys.lastUsedAt, expiresAt: apiKeys.expiresAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt }).from(apiKeys).orderBy(desc(apiKeys.createdAt));
+  const rows = await db.select({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix, scopes: apiKeys.scopes, projectIds: apiKeys.projectIds, dailyMutationLimit: apiKeys.dailyMutationLimit, lastUsedAt: apiKeys.lastUsedAt, expiresAt: apiKeys.expiresAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt }).from(apiKeys).orderBy(desc(apiKeys.createdAt));
   return ok(rows.map((r) => ({ ...r, status: r.revokedAt ? "revoked" : r.expiresAt && r.expiresAt.getTime() <= Date.now() ? "expired" : "active" })));
 }
 
@@ -39,9 +43,9 @@ export async function POST(req: Request) {
   const db = await getDb();
   const [row] = await db
     .insert(apiKeys)
-    .values({ name: parsed.data.name, keyHash, keyPrefix, scopes, expiresAt: parsed.data.ttlDays ? new Date(Date.now() + parsed.data.ttlDays * 24 * 60 * 60 * 1000) : null })
-    .returning({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix, scopes: apiKeys.scopes, expiresAt: apiKeys.expiresAt, createdAt: apiKeys.createdAt });
-  await recordAudit({ actorType: "operator", action: "POST /api/agent-keys", status: "ok", detail: `created key "${row.name}" (${row.id}) with scopes: ${scopes.join(",")}`, ip: clientIp(req) });
+    .values({ name: parsed.data.name, keyHash, keyPrefix, scopes, projectIds: parsed.data.projectIds ?? [], dailyMutationLimit: parsed.data.dailyMutationLimit ?? null, expiresAt: parsed.data.ttlDays ? new Date(Date.now() + parsed.data.ttlDays * 24 * 60 * 60 * 1000) : null })
+    .returning({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix, scopes: apiKeys.scopes, projectIds: apiKeys.projectIds, dailyMutationLimit: apiKeys.dailyMutationLimit, expiresAt: apiKeys.expiresAt, createdAt: apiKeys.createdAt });
+  await recordAudit({ actorType: "operator", action: "POST /api/agent-keys", status: "ok", detail: `created key "${row.name}" (${row.id}) with scopes: ${scopes.join(",")}${row.projectIds.length ? `; partitioned to ${row.projectIds.length} project(s)` : ""}${row.dailyMutationLimit ? `; daily budget ${row.dailyMutationLimit}` : ""}`, ip: clientIp(req) });
   return ok({ ...row, key, recommended: RECOMMENDED_AGENT_SCOPES, warning: "Store this key now. It is shown once and cannot be recovered." }, 201);
 }
 

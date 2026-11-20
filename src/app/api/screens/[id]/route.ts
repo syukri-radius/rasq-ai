@@ -7,6 +7,7 @@ import { body, fail, ok, type Params } from "@/lib/api";
 import { normalizeControls, type InControl } from "@/lib/screens";
 import { DATA_DIR } from "@/lib/runner";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export async function PUT(req: Request, { params }: Params<"id">) {
   const db = await getDb();
   const [existing] = await db.select().from(screens).where(eq(screens.id, id));
   if (!existing) return fail("Not found", 404);
+  if (!projectAllowed(auth.actor, existing.projectId)) return projectDeny();
   const b = await body<{ name?: string; groupKey?: string; frameCount?: number; timestampMs?: number; aiModel?: string | null; controls?: InControl[] }>(req);
   if (!Array.isArray(b.controls)) return fail("controls array is required");
   const valid = normalizeControls(b.controls);
@@ -46,6 +48,7 @@ export async function DELETE(req: Request, { params }: Params<"id">) {
   const { id } = await params;
   const db = await getDb();
   const [s] = await db.select().from(screens).where(eq(screens.id, id));
+  if (s && !projectAllowed(auth.actor, s.projectId)) return projectDeny();
   if (s) {
     fs.rmSync(path.join(DATA_DIR, "screens", s.imagePath), { force: true });
     await db.delete(screens).where(eq(screens.id, id));
@@ -60,6 +63,7 @@ export async function GET(req: Request, { params }: Params<"id">) {
   const db = await getDb();
   const [s] = await db.select().from(screens).where(eq(screens.id, id));
   if (!s) return new Response("Not found", { status: 404 });
+  if (!projectAllowed(auth.actor, s.projectId)) return projectDeny();
   const buf = fs.readFileSync(path.join(DATA_DIR, "screens", s.imagePath));
   return new Response(new Uint8Array(buf), { headers: { "content-type": s.imagePath.endsWith(".png") ? "image/png" : s.imagePath.endsWith(".webp") ? "image/webp" : "image/jpeg", "cache-control": "private, max-age=300" } });
 }

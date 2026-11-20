@@ -7,6 +7,7 @@ import { checkTarget, PerformancePlanSchema } from "@/lib/performance";
 import { allowedOrigins } from "@/lib/performanceRunner";
 import { authorize } from "@/lib/agentAuth";
 import { failStalePerformanceRuns } from "@/lib/performanceService";
+import { projectAllowed, projectDeny, planProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const projectId = new URL(req.url).searchParams.get("projectId");
   if (!projectId) return fail("projectId required");
+  if (!projectAllowed(auth.actor, projectId)) return projectDeny();
   const db = await getDb();
   await failStalePerformanceRuns(db);
   const cases = await db.select({ id: testCases.id, caseKey: testCases.caseKey, title: testCases.title, category: testCases.category }).from(testCases).where(eq(testCases.projectId, projectId));
@@ -47,6 +49,7 @@ export async function POST(req: Request) {
   if ("response" in auth) return auth.response;
   try {
     const b = await body<{ projectId: string; caseId: string; plan: unknown }>(req);
+    if (b.projectId && !projectAllowed(auth.actor, b.projectId)) return projectDeny();
     const { db, plan } = await validate(b.projectId, b.caseId, b.plan);
     const [row] = await db.insert(performancePlans).values({ projectId: b.projectId, caseId: b.caseId, config: plan }).returning();
     return ok(row, 201);
@@ -61,6 +64,7 @@ export async function PUT(req: Request) {
     const db = await getDb();
     const [existing] = await db.select().from(performancePlans).where(eq(performancePlans.id, b.id));
     if (!existing) return fail("Plan not found", 404);
+    if (!projectAllowed(auth.actor, existing.projectId)) return projectDeny();
     const caseId = existing.caseId ?? b.caseId ?? "";
     const { plan } = await validate(existing.projectId, caseId, b.plan);
     const [row] = await db.update(performancePlans).set({ caseId, config: plan, updatedAt: new Date() }).where(eq(performancePlans.id, b.id)).returning();
@@ -74,6 +78,8 @@ export async function DELETE(req: Request) {
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");
   const db = await getDb();
+  const pid = await planProjectId(db, id);
+  if (!pid || !projectAllowed(auth.actor, pid)) return projectDeny();
   const [active] = await db.select({ id: performanceRuns.id }).from(performanceRuns).where(and(eq(performanceRuns.planId, id), eq(performanceRuns.status, "running"))).limit(1);
   if (active) return fail("Cancel the active run before deleting its plan.", 409);
   await db.delete(performancePlans).where(eq(performancePlans.id, id));

@@ -4,7 +4,7 @@ Zero-DOM optical automation: client perception supplies geometry, an optional mu
 
 **Stack:** Next.js (App Router) · Drizzle ORM + libsql/SQLite (`data/rasq.db`) · Playwright · `@xyflow/react` (ReactFlow, the engine behind koolii/react-workflow-editor) · zod.
 
-**Version:** 1.2.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
+**Version:** 1.3.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
 
 ## Flow
 1. **Record & Scan** – full-screen recorder (start / pause / stop / cancel), screenshot/video upload, or server-side URL capture. Perception pipeline: luminance → Sobel → density grid → connected components → merged candidate regions → geometric labels + dHash template hash. Frames are grouped per page/window. Saved recording/screen scans can be reopened, edited, and updated in place while preserving unchanged control IDs.
@@ -60,6 +60,9 @@ RASQ-Ai exposes a scoped, audited machine surface so external AI agents (CI, orc
 - **Discovery**: OpenAPI 3.1 at `GET /api/openapi.json` (public) lists every operation and its `x-rasq-scope`. Agents start with [AGENT_GUIDE.md](./AGENT_GUIDE.md) and `GET /llms.txt`.
 - **Webhooks**: terminal events (`run.completed`, `desktop.run.completed`, `performance.run.completed`) are pushed to operator-registered HTTPS receivers — signed `x-rasq-signature: v1=hex(HMAC-SHA256(secret, "<timestamp>.<rawBody>"))`, retried (0s/+2s/+10s), every attempt logged in `webhook_deliveries`. Manage via `POST|GET|PATCH|DELETE /api/webhooks` (operator only; secret shown once) and test with `POST /api/webhooks/{id}/test`. Best-effort in-process delivery; never blocks a run.
 - **MCP**: `npm run mcp` (stdio) exposes a safe read/generate subset as MCP tools for tool-calling clients. It is a thin adapter over this same HTTP API (`RASQ_AI_URL`, `RASQ_API_KEY`) — no second auth path.
+- **Tenancy-lite (1.3.0)**: mint partitioned keys with `--projects id1,id2` (foreign projects answer 404; lists filter silently) and per-key UTC-day mutation budgets with `--daily-budget N`.
+- **Governance at scale (1.3.0)**: database-backed fixed-window rate limiting (survives restarts; fails closed with `503 rate_limiter_unavailable` rather than running unmeasured agents), `GET /api/audit` query + formula-injection-safe CSV export (operator only), and `npm run retention` (configurable windows for `audit_log` / `webhook_deliveries` / `idempotency_keys` / `usage_counters`).
+- **Guardrails**: the non-negotiable domain guardrails and their trade-offs are analyzed in [GUARDRAILS.md](./GUARDRAILS.md).
 
 The browser UI remains a single-operator surface without login; keep the deployment behind trusted access. See [AGENT_GUIDE.md](./AGENT_GUIDE.md) for the threat model, scope catalog, curl recipes, error codes and safety rules.
 
@@ -67,6 +70,7 @@ The browser UI remains a single-operator surface without login; keep the deploym
 
 - [Master Prompt](./MASTER_PROMPT.md) — reusable instructions for AI coding, QA, security, and architecture tasks, including RASQ-Ai's non-negotiable evidence, privacy, visual-locator, and traceability rules.
 - [Agent Guide](./AGENT_GUIDE.md) — how external AI agents use a running instance: API keys, scope catalog, idempotency, audit trail, error codes, safety rules, and decision record.
+- [Guardrails](./GUARDRAILS.md) — the non-negotiable guardrails for trustworthy automation in this domain (attended control, allowlists, budgets, retention, evidence rules) and the trade-offs they force.
 - [Context Memory](./CONTEXT_MEMORY.md) — a point-in-time architecture and behavior handoff covering routes, persistence, AI routing, perception, workflows, runs, reports, known constraints, and validation commands. Verify it against the current source and update it when architecture changes.
 - [AI API JSON Integration](./AI_API_JSON_INTEGRATION.md) — canonical request/response contract, generic protocol templates, routing behavior, and security limits.
 - [Enterprise Roadmap](./ENTERPRISE_ROADMAP.md) — prioritized recommendations for identity, durable execution, test governance, visual intelligence, AI routing, scale, and integrations.

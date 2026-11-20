@@ -4,6 +4,7 @@ import { desktopAgents, runs, runSteps } from "@/db/schema";
 import { fail, ok, type Params } from "@/lib/api";
 import { authorize } from "@/lib/agentAuth";
 import { notifyWebhooks, runCompletedData, loadRunForEvent } from "@/lib/webhooks";
+import { projectAllowed, projectDeny, runProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,10 @@ export async function POST(req: Request, { params }: Params<"id">) {
   const { id } = await params;
   const db = await getDb();
   const [run] = await db.select().from(runs).where(eq(runs.id, id));
+  if (run) {
+    const pid = await runProjectId(db, id);
+    if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
+  }
   if (!run || run.executor !== "robotjs-desktop") return fail("Desktop run not found", 404);
   if (!["pending", "running"].includes(run.status)) return ok({ cancelled: false, status: run.status });
   const queued = run.desktopSessionState === "queued";

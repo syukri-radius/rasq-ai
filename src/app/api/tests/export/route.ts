@@ -1,6 +1,7 @@
 import { fail } from "@/lib/api";
 import { loadCases } from "@/lib/cases";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export async function GET(req: Request) {
   const u = new URL(req.url);
   const pid = u.searchParams.get("projectId");
   if (!pid) return fail("projectId required");
+  if (!projectAllowed(auth.actor, pid)) return projectDeny();
   const { cases } = await loadCases(pid);
   if (u.searchParams.get("format") === "csv") {
     const head = ["caseKey", "title", "category", "priority", "requirements", "preconditions", "testData", "steps", "expected", "assumptions", "provenance"];

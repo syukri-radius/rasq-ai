@@ -10,6 +10,17 @@ The latest visual-only scenarios, update-in-place scan editing, n8n conversion, 
 
 ## Recommended sequence
 
+### Wave D — Governance at scale (delivered in 1.3.0)
+
+Delivered inside the current architecture rather than as a new enterprise tier, as scoped with the operator on 2026-11-20:
+
+- Database-backed (`usage_counters`) fixed-window rate limiting with fail-closed 503s, replacing per-process counters; optional per-key per-UTC-day mutation budgets (`dailyMutationLimit`).
+- `GET /api/audit`: operator-only audit query/export (JSON or formula-injection-safe CSV), with filters and 1,000/10,000-row caps.
+- `npm run retention`: configurable retention windows for `audit_log` (180d), `webhook_deliveries` (90d), `idempotency_keys` (25h), `usage_counters` (2d/400d); opportunistic throttled sweep on audit reads.
+- Tenancy-lite: agent keys may carry `project_ids` (empty = all projects, pre-1.3.0 behavior); foreign-project artifacts answer 404, lists filter silently, `POST /api/projects` → 403 scoped_key.
+- Non-negotiable domain guardrails and their trade-offs: GUARDRAILS.md (repo) with a mirrored Google Doc.
+- Explicitly not delivered (still required for real tenants): SSO/OIDC, RBAC, SCIM, per-tenant data isolation, durable queues, WORM evidence storage.
+
 ### Wave 0 — Enterprise trust and runtime foundation
 
 | Priority | Capability | Why it matters | Implementation guidance |

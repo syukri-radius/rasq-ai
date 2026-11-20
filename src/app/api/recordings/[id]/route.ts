@@ -6,6 +6,7 @@ import { recordings } from "@/db/schema";
 import { ok, type Params } from "@/lib/api";
 import { DATA_DIR } from "@/lib/runner";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny } from "@/lib/projectAccess";
 
 export async function GET(req: Request, { params }: Params<"id">) {
   const auth = await authorize(req, "screens:read");
@@ -14,6 +15,7 @@ export async function GET(req: Request, { params }: Params<"id">) {
   const db = await getDb();
   const [r] = await db.select().from(recordings).where(eq(recordings.id, id));
   if (!r) return new Response("Not found", { status: 404 });
+  if (!projectAllowed(auth.actor, r.projectId)) return projectDeny();
   const buf = fs.readFileSync(path.join(DATA_DIR, "recordings", r.filePath));
   return new Response(new Uint8Array(buf), { headers: { "content-type": r.mimeType, "content-length": String(buf.length), "cache-control": "private, max-age=300" } });
 }
@@ -24,6 +26,7 @@ export async function DELETE(req: Request, { params }: Params<"id">) {
   const { id } = await params;
   const db = await getDb();
   const [r] = await db.select().from(recordings).where(eq(recordings.id, id));
+  if (r && !projectAllowed(auth.actor, r.projectId)) return projectDeny();
   if (r) {
     fs.rmSync(path.join(DATA_DIR, "recordings", r.filePath), { force: true });
     await db.delete(recordings).where(eq(recordings.id, id));

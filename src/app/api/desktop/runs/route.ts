@@ -9,6 +9,7 @@ import { DesktopTargetSchema, DESKTOP_LIMITS, DESKTOP_PROTOCOL_VERSION } from "@
 import { compileStoredWorkflow, desktopBundlePath, failStaleDesktopRuns } from "@/lib/desktopService";
 import type { N8nWorkflow } from "@/lib/n8n";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 const CreateRunSchema = z.object({
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
     if (!agent.displays.some((d) => d.id === input.target.displayId)) return fail("The selected display is no longer reported by the agent; refresh capabilities.", 409);
     const [workflow] = await db.select().from(workflows).where(eq(workflows.id, input.workflowId));
     if (!workflow) return fail("Workflow not found", 404);
+    if (!projectAllowed(auth.actor, workflow.projectId)) return projectDeny();
     const { compilation, bundle } = await compileStoredWorkflow(db, input.workflowId, input.target);
     const errors = compilation.diagnostics.filter((d) => d.severity === "error");
     if (!bundle || errors.length) return ok({ diagnostics: compilation.diagnostics, error: "Resolve blocking desktop compiler diagnostics before starting a run." }, 422);

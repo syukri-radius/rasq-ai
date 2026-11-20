@@ -133,8 +133,16 @@ test("Idempotency-Key replays 2xx responses and rejects body drift", async () =>
   assert.ok(badKey instanceof Response && badKey.status === 400);
 });
 
-test("agent rate limiter allows a full window then blocks, per key id", () => {
-  const id = `bucket-${Date.now().toString(36)}`;
-  for (let i = 0; i < 120; i++) assert.equal(agentAuth.agentRateLimitOk(id), true, `call ${i} should be allowed`);
-  assert.equal(agentAuth.agentRateLimitOk(id), false);
+test("DB-backed agent rate limiter allows a full minute window then blocks, per key id", async () => {
+  const db = await getDb();
+  const { consumeAgentMutationBudget } = await import("../src/lib/rateLimit");
+  const { keyHash, keyPrefix } = agentAuth.generateApiKey();
+  const [row] = await db.insert(schema.apiKeys).values({ name: "ratelimit-agent", keyHash, keyPrefix, scopes: [] }).returning();
+  for (let i = 0; i < 120; i++) {
+    const r = await consumeAgentMutationBudget(db, row.id);
+    assert.equal(r.ok, true, `call ${i} should be allowed`);
+  }
+  const blocked = await consumeAgentMutationBudget(db, row.id);
+  assert.equal(blocked.ok, false);
+  if (!blocked.ok) assert.equal(blocked.reason, "minute");
 });

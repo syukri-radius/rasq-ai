@@ -6,6 +6,7 @@ import { body, fail, ok } from "@/lib/api";
 import { loadCases } from "@/lib/cases";
 import { AiReportSchema } from "@/lib/schemas";
 import { authorize } from "@/lib/agentAuth";
+import { projectAllowed, projectDeny, filterProjects, reportProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -15,7 +16,8 @@ export async function GET(req: Request) {
   if ("response" in auth) return auth.response;
   const db = await getDb();
   const pid = new URL(req.url).searchParams.get("projectId");
-  const rows = pid ? await db.select().from(reports).where(eq(reports.projectId, pid)).orderBy(desc(reports.createdAt)) : await db.select().from(reports).orderBy(desc(reports.createdAt));
+  if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
+  const rows = filterProjects(auth.actor, pid ? await db.select().from(reports).where(eq(reports.projectId, pid)).orderBy(desc(reports.createdAt)) : await db.select().from(reports).orderBy(desc(reports.createdAt)));
   return ok(rows);
 }
 
@@ -29,6 +31,7 @@ export async function POST(req: Request) {
   try {
     const db = await getDb();
     const b = await body<{ projectId: string }>(req);
+    if (b.projectId && !projectAllowed(auth.actor, b.projectId)) return projectDeny();
     const [proj] = await db.select().from(projects).where(eq(projects.id, b.projectId ?? ""));
     if (!proj) return fail("Project not found", 404);
     const { cases, reqs } = await loadCases(proj.id);
@@ -136,6 +139,8 @@ export async function DELETE(req: Request) {
   const db = await getDb();
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return fail("id required");
+  const pid = await reportProjectId(db, id);
+  if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
   await db.delete(reports).where(eq(reports.id, id));
   return ok();
 }

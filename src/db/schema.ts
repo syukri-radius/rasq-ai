@@ -22,12 +22,31 @@ export const apiKeys = sqliteTable(
     /** First characters of the plaintext key (e.g. "rasq_7f3a…"); safe to display, never sufficient to authenticate. */
     keyPrefix: text("key_prefix").notNull(),
     scopes: text("scopes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Projects this key may act on; empty = all projects (backward-compatible default). */
+    projectIds: text("project_ids", { mode: "json" }).$type<string[]>().notNull().default([]),
+    /** Max mutating calls per UTC day; null = unlimited (or the server-wide RASQ_AGENT_DAILY_MUTATIONS default). */
+    dailyMutationLimit: integer("daily_mutation_limit"),
     lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
     expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
     revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
     createdAt: createdAt(),
   },
   (t) => [unique("api_keys_key_hash_unique").on(t.keyHash)],
+);
+
+/** Fixed-window usage counters backing the DB rate limiter and per-key daily mutation budgets. Rows are GC'd by the retention sweep. */
+export const usageCounters = sqliteTable(
+  "usage_counters",
+  {
+    keyId: text("key_id")
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: "cascade" }),
+    /** "minute" (bucket = epoch minute) or "day" (bucket = UTC YYYY-MM-DD). */
+    period: text("period").notNull(),
+    bucket: text("bucket").notNull(),
+    count: integer("count").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.keyId, t.period, t.bucket] })],
 );
 
 /** Append-only audit trail. Rows are never updated or deleted by the application. */

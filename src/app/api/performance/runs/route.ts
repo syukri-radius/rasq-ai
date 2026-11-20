@@ -7,6 +7,7 @@ import { analyze, checkTarget, PerformancePlanSchema, type PerformancePlan, type
 import { allowedOrigins, cancelPerformanceRun, runJmeter } from "@/lib/performanceRunner";
 import { authorize } from "@/lib/agentAuth";
 import { failStalePerformanceRuns, notifyPerformanceRunCompleted } from "@/lib/performanceService";
+import { projectAllowed, projectDeny, performanceRunProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
   const db = await getDb();
   const [saved] = await db.select().from(performancePlans).where(eq(performancePlans.id, b.planId));
   if (!saved) return fail("Plan not found", 404);
+  if (!projectAllowed(auth.actor, saved.projectId)) return projectDeny();
   if (!saved.caseId) return fail("Linked scenario was deleted; relink the plan before running.", 409);
   const parsed = PerformancePlanSchema.safeParse(saved.config);
   if (!parsed.success) return fail("Stored plan is invalid; edit it before running.");
@@ -60,6 +62,7 @@ export async function GET(req: Request) {
   const db = await getDb();
   await failStalePerformanceRuns(db);
   const [run] = await db.select().from(performanceRuns).where(eq(performanceRuns.id, id));
+  if (run && !projectAllowed(auth.actor, (await performanceRunProjectId(db, id)) ?? "")) return projectDeny();
   return run ? ok(run) : fail("Run not found", 404);
 }
 
@@ -71,6 +74,7 @@ export async function DELETE(req: Request) {
   const db = await getDb();
   const [run] = await db.select().from(performanceRuns).where(eq(performanceRuns.id, id));
   if (!run || run.status !== "running") return fail("Active run not found", 404);
+  if (!projectAllowed(auth.actor, (await performanceRunProjectId(db, id)) ?? "")) return projectDeny();
   if (!cancelPerformanceRun(id)) return fail("Run is not active in this server process.", 409);
   return ok({ cancelled: true });
 }

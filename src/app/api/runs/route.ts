@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
 import { runs, workflows } from "@/db/schema";
 import { body, fail, ok } from "@/lib/api";
@@ -7,6 +7,7 @@ import { failStaleDesktopRuns } from "@/lib/desktopService";
 import { authorize } from "@/lib/agentAuth";
 import { beginIdempotency } from "@/lib/idempotency";
 import { NextResponse } from "next/server";
+import { projectAllowed, projectDeny, workflowProjectId } from "@/lib/projectAccess";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,16 @@ export async function GET(req: Request) {
   await failStaleDesktopRuns(db);
   await failStaleRuns(db);
   const wid = new URL(req.url).searchParams.get("workflowId");
-  return ok(wid ? await db.select().from(runs).where(eq(runs.workflowId, wid)).orderBy(desc(runs.startedAt)).limit(20) : await db.select().from(runs).orderBy(desc(runs.startedAt)).limit(50));
+  if (wid) {
+    const pid = await workflowProjectId(db, wid);
+    if (pid && !projectAllowed(auth.actor, pid)) return projectDeny();
+    return ok(await db.select().from(runs).where(eq(runs.workflowId, wid)).orderBy(desc(runs.startedAt)).limit(20));
+  }
+  if (auth.actor.kind === "agent" && auth.actor.projectIds.length) {
+    const rows = await db.select({ run: runs }).from(runs).innerJoin(workflows, eq(workflows.id, runs.workflowId)).where(inArray(workflows.projectId, auth.actor.projectIds)).orderBy(desc(runs.startedAt)).limit(50);
+    return ok(rows.map((r) => r.run));
+  }
+  return ok(await db.select().from(runs).orderBy(desc(runs.startedAt)).limit(50));
 }
 
 export async function POST(req: Request) {
@@ -34,6 +44,7 @@ export async function POST(req: Request) {
     if (idem instanceof NextResponse) return idem;
     const [w] = await db.select().from(workflows).where(eq(workflows.id, b.workflowId));
     if (!w) return fail("Workflow not found", 404);
+    if (!projectAllowed(auth.actor, w.projectId)) return projectDeny();
     const open = (w.n8n.nodes as { type: string; parameters: { url?: string } }[]).find((n) => n.type === "rasq-ai.openTarget");
     const id = await startRun(b.workflowId, mode, b.targetUrl || open?.parameters.url || "");
     const payload = { id };
