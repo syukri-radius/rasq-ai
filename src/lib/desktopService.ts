@@ -16,6 +16,7 @@ import {
 } from "./desktopContract";
 import { DATA_DIR } from "./runner";
 import type { RunStatus } from "./types";
+import { notifyWebhooks, runCompletedData, loadRunForEvent } from "./webhooks";
 
 export const desktopBundlePath = (runId: string) => path.join(DATA_DIR, "desktop", "bundles", `${runId}.zip`);
 
@@ -53,6 +54,12 @@ export async function failStaleDesktopRuns(db: Db): Promise<void> {
     await db.update(runs).set({ status: "error", error: message, desktopSessionState: "terminal", finishedAt: new Date(), summary: { error: 1 } }).where(and(eq(runs.id, run.id), inArray(runs.status, ["pending", "running"])));
     await db.update(runSteps).set({ status: "skipped", message: "Not executed after the desktop agent became unavailable." }).where(and(eq(runSteps.runId, run.id), inArray(runSteps.status, ["pending", "running"])));
     if (agent) await db.update(desktopAgents).set({ availability: "idle", currentRunId: null }).where(eq(desktopAgents.id, agent.id));
+    try {
+      const finished = await loadRunForEvent(db, run.id);
+      if (finished) notifyWebhooks(db, "desktop.run.completed", runCompletedData(finished));
+    } catch (e) {
+      console.warn("desktop.run.completed webhook notification failed:", e instanceof Error ? e.message : e);
+    }
   }
 }
 
@@ -106,4 +113,10 @@ async function applyDesktopEvent(db: Db, agentId: string, runId: string, event: 
   const message = unfinished && complete.status !== "error" ? "Agent completed without terminal evidence for every step." : complete.message;
   await db.update(runs).set({ status, error: status === "error" ? message : null, summary, desktopSessionState: "terminal", finishedAt: new Date() }).where(eq(runs.id, runId));
   await db.update(desktopAgents).set({ availability: "idle", currentRunId: null }).where(eq(desktopAgents.id, agentId));
+  try {
+    const finished = await loadRunForEvent(db, runId);
+    if (finished) notifyWebhooks(db, "desktop.run.completed", runCompletedData(finished));
+  } catch (e) {
+    console.warn("desktop.run.completed webhook notification failed:", e instanceof Error ? e.message : e);
+  }
 }

@@ -32,7 +32,7 @@ export const openApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "RASQ-Ai API",
-    version: "1.1.0",
+    version: "1.2.0",
     description:
       "Trustworthy visual test automation: optical capture, requirements traceability, test design, workflow execution and evidence-based reporting. External agents authenticate with scoped API keys (see /AGENT_GUIDE.md or the repository's AGENT_GUIDE.md). The browser UI is a single-operator surface; agents must never rely on unauthenticated access.",
     contact: { name: "RASQ-Ai operator" },
@@ -51,6 +51,7 @@ export const openApiDocument = {
     { name: "performance", description: "Restricted JSON REST load plans (JMeter)" },
     { name: "desktop", description: "Attended desktop agent control plane" },
     { name: "agent-keys", description: "API key management (operator only)" },
+    { name: "webhooks", description: "Outbound webhook endpoints for terminal run events (operator only)" },
   ],
   components: {
     securitySchemes: {
@@ -68,6 +69,17 @@ export const openApiDocument = {
       Health: { type: "object", properties: { ok: { type: "boolean" }, engine: { type: "string" }, app: { type: "string" }, version: { type: "string" } } },
       Project: { type: "object", properties: { id: { type: "string" }, name: { type: "string" }, surface: { type: "string", enum: ["web", "desktop", "citrix", "vmware", "mobile", "design"] }, targetUrl: { type: "string" }, description: { type: "string" }, createdAt: { type: "string", format: "date-time" } } },
       TestCase: { type: "object", properties: { id: { type: "string" }, caseKey: { type: "string" }, title: { type: "string" }, category: { type: "string" }, priority: { type: "string", enum: ["P0", "P1", "P2", "P3"] }, requirementIds: { type: "array", items: { type: "string" } }, provenance: { type: "string" } } },
+      WebhookEvent: {
+        type: "object",
+        required: ["id", "type", "createdAt", "data"],
+        properties: {
+          id: { type: "string", description: "evt_<uuid>" },
+          type: { type: "string", enum: ["run.completed", "desktop.run.completed", "performance.run.completed", "webhook.test"] },
+          createdAt: { type: "string", format: "date-time" },
+          data: { type: "object", description: "Terminal run summary (runId, workflowId/planId, status, summary, error, timestamps). See AGENT_GUIDE.md#webhooks." },
+        },
+        description: "Delivered as POST application/json with x-rasq-signature: v1=<hex HMAC-SHA256(secret, `<timestamp>.<rawBody>`)> and x-rasq-webhook-timestamp header.",
+      },
       Run: { type: "object", properties: { id: { type: "string" }, workflowId: { type: "string" }, mode: { type: "string", enum: ["playwright", "dry-run"] }, status: { type: "string", enum: ["pending", "running", "passed", "failed", "warning", "skipped", "needs-review", "error"] }, summary: { type: "object", additionalProperties: { type: "number" } }, error: { type: ["string", "null"] } } },
     },
   },
@@ -197,6 +209,18 @@ export const openApiDocument = {
     },
     "/api/desktop/runs/{id}/cancel": {
       post: { tags: ["desktop"], summary: "Request cancellation of a desktop run", ...scope("desktop:attend"), security: bearer, parameters: [idParam], responses: { "200": { description: "Cancellation requested" }, "403": errRes("Missing scope") } },
+    },
+    "/api/webhooks": {
+      get: { tags: ["webhooks"], summary: "List webhook endpoints (secrets never returned; operator only)", security: bearer, responses: { "200": { description: "Webhook list" }, "403": errRes("Operator only") } },
+      post: { tags: ["webhooks"], summary: "Register an endpoint for terminal events (operator only). Signing secret is returned once", security: bearer, requestBody: { required: true, content: json({ type: "object", required: ["name", "url", "events"], properties: { name: { type: "string" }, url: { type: "string", format: "uri" }, events: { type: "array", items: { type: "string", enum: ["run.completed", "desktop.run.completed", "performance.run.completed", "webhook.test"] } }, enabled: { type: "boolean" } } }) }, responses: { "201": { description: "Created; store the whsec_ secret now" }, "400": errRes("Validation failed"), "403": errRes("Operator only"), "409": errRes("Limit reached") } },
+      patch: { tags: ["webhooks"], summary: "Enable/disable an endpoint (operator only)", security: bearer, requestBody: { required: true, content: json({ type: "object", required: ["id", "enabled"], properties: { id: { type: "string", format: "uuid" }, enabled: { type: "boolean" } } }) }, responses: { "200": { description: "Updated" }, "403": errRes("Operator only"), "404": errRes("Not found") } },
+      delete: { tags: ["webhooks"], summary: "Delete endpoint and its delivery history (query ?id=, operator only)", security: bearer, responses: { "200": { description: "Deleted" }, "403": errRes("Operator only"), "404": errRes("Not found") } },
+    },
+    "/api/webhooks/{id}/test": {
+      post: { tags: ["webhooks"], summary: "Send a synthetic webhook.test event to this endpoint (operator only)", security: bearer, parameters: [idParam], responses: { "200": { description: "Delivered; check `delivered` for the receiver result" }, "403": errRes("Operator only"), "404": errRes("Not found"), "502": errRes("Receiver rejected or unreachable") } },
+    },
+    "/api/webhooks/deliveries": {
+      get: { tags: ["webhooks"], summary: "Delivery attempts, newest 100 (query ?webhookId= to scope; operator only)", security: bearer, responses: { "200": { description: "Delivery history" }, "403": errRes("Operator only") } },
     },
     "/api/agent-keys": {
       get: { tags: ["agent-keys"], summary: "List key metadata (operator only; never plaintext)", security: bearer, responses: { "200": { description: "Key list" }, "403": errRes("Operator only") } },

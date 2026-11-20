@@ -16,6 +16,8 @@ Keys are created by the operator via `POST /api/agent-keys` or `npm run agent:ke
 
 - OpenAPI 3.1: `GET /api/openapi.json` (public) — every operation lists its `x-rasq-scope`.
 - Full guide with curl recipes, error codes and safety rules: `AGENT_GUIDE.md` at the repository root.
+- Webhooks: terminal events (`run.completed`, `desktop.run.completed`, `performance.run.completed`, `webhook.test`) can be pushed to a registered HTTPS receiver; operator-only setup via `POST /api/webhooks` (secret `whsec_…` shown once). Deliveries are signed `x-rasq-signature: v1=hex(HMAC_SHA256(secret, "<ts>.<rawBody>"))` — verify before trusting.
+- MCP: a stdio MCP server (`npm run mcp`, env `RASQ_AI_URL` + `RASQ_API_KEY`) exposes the read + safe-generation subset as tools; it is a thin adapter over this same HTTP API, so scopes/audit/rate-limits apply unchanged.
 
 ## Capability map (scopes)
 
@@ -44,5 +46,6 @@ Recommended starting set: projects:read, screens:read, requirements:read, tests:
 - Desktop (RobotJS) input is attended: preflight → `awaiting-operator-confirmation` → operator confirms. Never confirm on an operator's behalf unless granted the desktop:confirm scope, and only with explicit instruction.
 - Load tests (`performance:load`) only against targets on `RASQ_JMETER_ALLOWED_ORIGINS`, and only when authorized.
 - Send `Idempotency-Key` on POST /api/runs, /api/tests, /api/workflows; replays return the stored response with `idempotent-replay: true`.
+- Prefer webhooks for completion signals when registered; otherwise poll `GET /api/runs/{id}` (no event stream exists).
 - Errors are `{ "error": string, "code"?: string }`. Back off on `429 rate_limited`; do not retry `403 insufficient_scope` without an operator granting the scope.
 - Generated artifacts are not execution evidence. Reports distinguish them; keep that distinction in your outputs.

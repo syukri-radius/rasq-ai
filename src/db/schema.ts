@@ -47,6 +47,37 @@ export const auditLog = sqliteTable(
   (t) => [index("audit_log_created_at_idx").on(t.createdAt)],
 );
 
+/** Operator-configured outbound webhooks for terminal run events. The HMAC signing secret is stored (like outbound provider credentials) so deliveries can be signed; it is shown once at creation and never listed back. */
+export const webhooks = sqliteTable("webhooks", {
+  id: pk(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  secret: text("secret").notNull(),
+  events: text("events", { mode: "json" }).$type<string[]>().notNull().default([]),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  lastDeliveryAt: integer("last_delivery_at", { mode: "timestamp_ms" }),
+  lastStatus: text("last_status").notNull().default(""),
+  createdAt: createdAt(),
+});
+
+/** One row per delivery attempt result. Never updated after insert. */
+export const webhookDeliveries = sqliteTable(
+  "webhook_deliveries",
+  {
+    id: pk(),
+    webhookId: text("webhook_id")
+      .notNull()
+      .references(() => webhooks.id, { onDelete: "cascade" }),
+    eventType: text("event_type").notNull(),
+    status: text("status").notNull(), // ok | failed
+    httpStatus: integer("http_status"),
+    error: text("error").notNull().default(""),
+    attempt: integer("attempt").notNull().default(1),
+    createdAt: createdAt(),
+  },
+  (t) => [index("webhook_deliveries_webhook_idx").on(t.webhookId, t.createdAt)],
+);
+
 /** Idempotency-Key replay records for mutating agent/operator calls. Entries older than 24h are purged opportunistically. */
 export const idempotencyKeys = sqliteTable(
   "idempotency_keys",

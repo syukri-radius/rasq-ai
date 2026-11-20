@@ -19,7 +19,7 @@ const CreateKeySchema = z
 
 /** List API-key metadata (never hashes or plaintext). Operator only. */
 export async function GET(req: Request) {
-  const auth = await requireOperator(req);
+  const auth = await requireOperator(req, "API key management");
   if ("response" in auth) return auth.response;
   const db = await getDb();
   const rows = await db.select({ id: apiKeys.id, name: apiKeys.name, keyPrefix: apiKeys.keyPrefix, scopes: apiKeys.scopes, lastUsedAt: apiKeys.lastUsedAt, expiresAt: apiKeys.expiresAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt }).from(apiKeys).orderBy(desc(apiKeys.createdAt));
@@ -28,7 +28,7 @@ export async function GET(req: Request) {
 
 /** Mint a new API key. The plaintext is returned exactly once and is never stored. Operator only. */
 export async function POST(req: Request) {
-  const auth = await requireOperator(req);
+  const auth = await requireOperator(req, "API key management");
   if ("response" in auth) return auth.response;
   const parsed = CreateKeySchema.safeParse(await body(req));
   if (!parsed.success) return fail(`Invalid request: ${parsed.error.issues[0]?.message ?? "bad payload"}`, 400, "validation_failed");
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
 /** Revoke an API key by id. Idempotent for already-revoked keys. Operator only. */
 export async function DELETE(req: Request) {
-  const auth = await requireOperator(req);
+  const auth = await requireOperator(req, "API key management");
   if ("response" in auth) return auth.response;
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!id) return fail("id required", 400, "id_required");

@@ -171,14 +171,14 @@ export async function authorize(req: Request, scope: ApiKeyScope): Promise<{ act
   return { actor };
 }
 
-/** Operator-only guard for key management routes: agents (even valid ones) may not mint, list, or revoke keys. */
-export async function requireOperator(req: Request): Promise<{ actor: Actor } | { response: NextResponse }> {
+/** Operator-only guard for key/webhook management routes: agents (even valid ones) may not mint, list, revoke keys or manage webhook endpoints. */
+export async function requireOperator(req: Request, subject = "this action"): Promise<{ actor: Actor } | { response: NextResponse }> {
   const header = req.headers.get("authorization");
   if (!header) return { actor: { kind: "operator" } };
   const resolved = await resolveActor(req);
   if ("response" in resolved) return resolved;
-  await recordAudit({ actorType: "agent", actorId: resolved.actor.kind === "agent" ? resolved.actor.id : null, actorName: resolved.actor.kind === "agent" ? resolved.actor.name : "", action: actionLabel(req), status: "denied", detail: "agents may not manage API keys", ip: clientIp(req) });
-  return { response: fail("Only the operator may manage API keys.", 403, "operator_only") };
+  await recordAudit({ actorType: "agent", actorId: resolved.actor.kind === "agent" ? resolved.actor.id : null, actorName: resolved.actor.kind === "agent" ? resolved.actor.name : "", action: actionLabel(req), status: "denied", detail: `agents may not perform ${subject}`, ip: clientIp(req) });
+  return { response: fail(`Only the operator may perform ${subject}.`, 403, "operator_only") };
 }
 
 /** Constant-time equality for secrets of equal length; used by the CLI and tests. */

@@ -43,6 +43,7 @@ Authorization: Bearer rasq_<random>
 - **OpenAPI 3.1** at `GET /api/openapi.json` (public). Each operation carries `x-rasq-scope`.
 - **Error envelope**: `{ "error": string, "code"?: string }`. `code` is stable for machines; `error` is human-readable.
 - **`Idempotency-Key`** header is honored on `POST /api/runs`, `POST /api/tests`, `POST /api/workflows` (agent or operator). Replay rules in §6.
+- **Webhooks** — terminal events can be pushed to your receiver; see §10. **MCP** — the same surface is available as MCP stdio tools; see §11.
 
 ## 4. Scope catalog
 
@@ -129,16 +130,67 @@ On `POST /api/runs`, `POST /api/tests`, `POST /api/workflows`:
 
 ## 9. What this does not (yet) give you
 
-- No webhooks/SSE — poll `GET /api/runs/{id}` (≥900 ms interval) or `GET /api/performance/runs?id=`. Event push is a planned (Wave C) integration surface.
+- Webhooks push **terminal events only** (no step-level streaming) and delivery is best-effort in-process: a receiver outage never blocks or fails the run, and retries stop after three attempts. There is no SSE stream.
 - No `/api/v1` namespace — paths are `/api/...` with additive-only changes inside `openapi.info.version` 1.x.
 - No multi-tenancy, no per-project key partitioning; a key can act on every project unless the operator names it down.
-- In-process runners are not a durable queue; a server restart can strand a run (desktop runs are marked stale automatically).
+- In-process runners are not a durable queue; a server restart can strand a run. Stale desktop and Playwright runs (no progress ≥30 min) and stale performance runs (>120 s) are marked `error` automatically when a list/poll endpoint is next hit, and the terminal webhook fires for them.
 - Rate limiting is per process, not distributed.
 
-## 10. Decision record (why it is built this way)
+## 10. Webhooks (terminal events)
+
+**Operator setup** (agents cannot manage webhooks; they are operator-only like key management):
+
+```bash
+curl -X POST http://localhost:3000/api/webhooks -H 'content-type: application/json'   -d '{"name":"ci-notify","url":"https://ci.example.com/hooks/rasq","events":["run.completed"]}'
+```
+
+The response returns `secret` (`whsec_…`) **once** — store it like a credential. Manage with `GET/PATCH/DELETE /api/webhooks` (`?id=` for delete), send a synthetic event with `POST /api/webhooks/{id}/test`, and inspect attempts with `GET /api/webhooks/deliveries`.
+
+**Event envelope** (same for every type; `POST` with `content-type: application/json`):
+
+```json
+{ "id": "evt_<uuid>", "type": "run.completed", "createdAt": "2026-11-20T03:00:00.000Z",
+  "data": { "runId": "…", "workflowId": "…", "mode": "playwright", "status": "passed",
+            "executor": "playwright", "driver": null, "summary": { "passed": 12 }, "error": null,
+            "startedAt": "…", "finishedAt": "…" } }
+```
+
+Event types: `run.completed` (Playwright/dry-run, incl. stale-run failure), `desktop.run.completed` (desktop executor), `performance.run.completed`, `webhook.test`.
+
+**Verifying signatures** — every delivery carries:
+
+- `x-rasq-webhook-timestamp: <unix seconds>`
+- `x-rasq-signature: v1=<hex>` where `<hex> = HMAC_SHA256(secret, "<timestamp>.<rawBody>")`
+- `x-rasq-webhook-id: <event id>`
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+const expected = "v1=" + createHmac("sha256", secret).update(`${ts}.${rawBody}`).digest("hex");
+if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) reject();
+if (!timingSafeEqual(Buffer.from(expected), Buffer.from(signatureHeader))) reject();
+```
+
+Delivery rules: best-effort, fire-and-forget; retries at 0s / +2s / +10s (same event id, `attempt` in the delivery log); every attempt is recorded in `webhook_deliveries` and `lastDeliveryAt`/`lastStatus` on the endpoint; 10s timeout; receivers should answer `2xx` quickly and process asynchronously. RASQ-Ai stores the signing secret (unlike API keys, it cannot be hashed — it is used to sign), so protect `data/` accordingly.
+
+## 11. MCP (Model Context Protocol)
+
+A stdio MCP server exposes the safe subset of this API as tools. It is a **thin adapter**: it holds no credentials of its own beyond the operator-issued key in its environment and forwards every call over HTTP, so scoping, audit and rate limiting are exactly the ones above. Exposed tools: `rasqai_health`, `rasqai_list_projects`, `rasqai_list_requirements`, `rasqai_list_screens`, `rasqai_list_test_cases`, `rasqai_list_workflows`, `rasqai_list_runs`, `rasqai_get_run`, `rasqai_list_reports`, `rasqai_generate_test_cases`, `rasqai_start_dry_run` (the last two take an optional `idempotency_key`). No destructive, attending, or load-generating tools are exposed.
+
+```bash
+RASQ_AI_URL=http://127.0.0.1:3000 RASQ_API_KEY=rasq_... npm run mcp
+```
+
+MCP client config (Claude Desktop and compatible):
+
+```json
+{ "mcpServers": { "rasq-ai": { "command": "npm", "args": ["run", "mcp", "--prefix", "/path/to/rasq-ai"],
+    "env": { "RASQ_AI_URL": "http://127.0.0.1:3000", "RASQ_API_KEY": "rasq_..." } } } }
+```
+
+## 12. Decision record (why it is built this way)
 
 - **Why API keys and not full SSO/RBAC now?** SSO/tenant isolation is Wave 0 of `ENTERPRISE_ROADMAP.md`. Keys deliver scoped, auditable machine access with minimal surface change and no UI rewrite; browser UI stays single-operator and documented as such.
 - **Why scopes on existing routes instead of a new `/api/v1` facade?** One handler per operation, no drift; the OpenAPI document is the contract, versioned via `info.version`. A parallel facade would fork behavior.
 - **Why fail closed on bad `Authorization` headers instead of ignoring them?** Silent downgrade to operator (the pre-1.1.0 status quo) is the worst of both worlds.
-- **Why not MCP yet?** MCP is the right next integration (Wave C) but wraps exactly this scope/audit/idempotency layer; building the layer first means the MCP server is a thin adapter, not a second security boundary.
+- **Why is MCP a thin stdio adapter over HTTP instead of a second auth path?** It wraps exactly this scope/audit/idempotency layer; building the layer first means the MCP server is a thin adapter, not a second security boundary.
 - **Trade-offs accepted:** additive-only API stability over deep versioning; operator-bypass auth for the UI over breaking the app; best-effort in-memory rate limiting over a distributed limiter; hand-maintained OpenAPI over codegen drift (enforced by review, not tooling).

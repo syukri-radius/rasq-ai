@@ -4,7 +4,7 @@ Zero-DOM optical automation: client perception supplies geometry, an optional mu
 
 **Stack:** Next.js (App Router) · Drizzle ORM + libsql/SQLite (`data/rasq.db`) · Playwright · `@xyflow/react` (ReactFlow, the engine behind koolii/react-workflow-editor) · zod.
 
-**Version:** 1.1.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
+**Version:** 1.2.0 — set in `package.json`, shown in the sidebar and returned by `/api/health`.
 
 ## Flow
 1. **Record & Scan** – full-screen recorder (start / pause / stop / cancel), screenshot/video upload, or server-side URL capture. Perception pipeline: luminance → Sobel → density grid → connected components → merged candidate regions → geometric labels + dHash template hash. Frames are grouped per page/window. Saved recording/screen scans can be reopened, edited, and updated in place while preserving unchanged control IDs.
@@ -58,6 +58,8 @@ RASQ-Ai exposes a scoped, audited machine surface so external AI agents (CI, orc
 - **Idempotency**: `Idempotency-Key` on `POST /api/runs`, `POST /api/tests`, `POST /api/workflows` replays the stored 2xx response (`idempotent-replay: true`) or returns `409 idempotency_conflict`.
 - **Attribution**: every mutating call is recorded in the append-only `audit_log` table (actor, action, ok/denied, IP). Provenance strings in artifacts are unchanged; the audit log is the agent attribution record.
 - **Discovery**: OpenAPI 3.1 at `GET /api/openapi.json` (public) lists every operation and its `x-rasq-scope`. Agents start with [AGENT_GUIDE.md](./AGENT_GUIDE.md) and `GET /llms.txt`.
+- **Webhooks**: terminal events (`run.completed`, `desktop.run.completed`, `performance.run.completed`) are pushed to operator-registered HTTPS receivers — signed `x-rasq-signature: v1=hex(HMAC-SHA256(secret, "<timestamp>.<rawBody>"))`, retried (0s/+2s/+10s), every attempt logged in `webhook_deliveries`. Manage via `POST|GET|PATCH|DELETE /api/webhooks` (operator only; secret shown once) and test with `POST /api/webhooks/{id}/test`. Best-effort in-process delivery; never blocks a run.
+- **MCP**: `npm run mcp` (stdio) exposes a safe read/generate subset as MCP tools for tool-calling clients. It is a thin adapter over this same HTTP API (`RASQ_AI_URL`, `RASQ_API_KEY`) — no second auth path.
 
 The browser UI remains a single-operator surface without login; keep the deployment behind trusted access. See [AGENT_GUIDE.md](./AGENT_GUIDE.md) for the threat model, scope catalog, curl recipes, error codes and safety rules.
 

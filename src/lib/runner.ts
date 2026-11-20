@@ -1,13 +1,14 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { eq, asc, and } from "drizzle-orm";
+import { eq, asc, and, inArray, lt } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { getDb } from "@/db";
+import { getDb, type Db } from "@/db";
 import { runs, runSteps, workflows } from "@/db/schema";
 import { executionOrder, NT, type N8nNode, type N8nWorkflow } from "./n8n";
 import { hashSimilarity } from "./perception";
 import { isReviewOnlyControlType, type RunStatus } from "./types";
+import { notifyWebhooks, runCompletedData, loadRunForEvent } from "./webhooks";
 
 export const DATA_DIR = path.resolve(process.cwd(), "data");
 export const baseUrl = () => `http://127.0.0.1:${process.env.PORT ?? 3000}`;
@@ -371,4 +372,28 @@ async function executeRun(runId: string, order: N8nNode[], targetUrl: string, mo
   for (const s of statuses) summary[s] = (summary[s] ?? 0) + 1;
   const status: RunStatus = fatal ? "error" : rank.find((r) => statuses.includes(r)) ?? "skipped";
   await db.update(runs).set({ status, error: fatal, summary, finishedAt: new Date() }).where(eq(runs.id, runId));
+  try {
+    const finished = await loadRunForEvent(db, runId);
+    if (finished) notifyWebhooks(db, "run.completed", runCompletedData(finished));
+  } catch (e) {
+    console.warn("run.completed webhook notification failed:", e instanceof Error ? e.message : e);
+  }
+}
+
+/** In-process runs are not durable; a process restart can strand them. Mark playwright/dry-run rows that have been pending/running far beyond any plausible browser job as error so agents see honest terminal states. */
+export const STALE_RUN_MS = 30 * 60_000;
+export async function failStaleRuns(db: Db): Promise<number> {
+  const cutoff = new Date(Date.now() - STALE_RUN_MS);
+  const stale = await db.select({ id: runs.id }).from(runs).where(and(inArray(runs.executor, ["playwright"]), inArray(runs.status, ["pending", "running"]), lt(runs.startedAt, cutoff)));
+  if (!stale.length) return 0;
+  await db.update(runs).set({ status: "error", error: "Run interrupted or exceeded the server deadline.", finishedAt: new Date() }).where(and(inArray(runs.id, stale.map((r) => r.id)), inArray(runs.status, ["pending", "running"])));
+  for (const { id } of stale) {
+    try {
+      const finished = await loadRunForEvent(db, id);
+      if (finished) notifyWebhooks(db, "run.completed", runCompletedData(finished));
+    } catch (e) {
+      console.warn("stale-run webhook notification failed:", e instanceof Error ? e.message : e);
+    }
+  }
+  return stale.length;
 }
