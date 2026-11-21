@@ -4,6 +4,7 @@ import type { SQLiteTable } from "drizzle-orm/sqlite-core";
 import { getDb } from "@/db";
 import { controls, projects, requirements, runs, screens, testCases, workflows, recordings } from "@/db/schema";
 import { Badge, Card, PageHeader } from "@/components/ui";
+import BotAvatarPanel from "@/components/BotAvatarPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,9 @@ export default async function Dashboard() {
             <p className="mt-1 text-xs leading-relaxed text-muted">{p.d}</p>
           </Link>
         ))}
+      </div>
+      <div className="mb-6">
+        <BotAvatarPanel />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Latest runs">

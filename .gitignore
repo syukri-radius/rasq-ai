@@ -5,3 +5,6 @@ node_modules/
 data/
 logs/
 *.tsbuildinfo
+
+# Local diagnostics for the bot avatar work. Not product code.
+.scratch/
