@@ -83,7 +83,7 @@ The project is currently a compact single-operator application, not a demonstrat
 - `unpdf` for server-side PDF text extraction.
 - `lucide-react` for icons.
 - `pg`, `@types/pg`, and `dotenv` are dependencies, but the reviewed runtime path uses libsql/SQLite rather than PostgreSQL.
-- `package.json` still has the starter name `nextjs-postgresql-template` and now carries `version` `1.1.0`; UI metadata and runtime behavior identify the app as RASQ-Ai. `src/lib/version.ts` exports the same value as `APP_VERSION` for the sidebar, the root metadata (`<meta name="version">`) and `/api/health`; `tests/version.test.ts` fails when it drifts from `package.json` or `package-lock.json`. `desktop-agent/` is versioned separately and remains `0.1.0`.
+- `package.json` was renamed to `rasq-ai` (starter name `nextjs-postgresql-template` removed) on 2026-11-25; UI metadata and runtime behavior identify the app as RASQ-Ai. `src/lib/version.ts` exports the same value as `APP_VERSION` for the sidebar, the root metadata (`<meta name="version">`) and `/api/health`; `tests/version.test.ts` fails when it drifts from `package.json` or `package-lock.json`. `desktop-agent/` is versioned separately and remains `0.1.0`.
 
 Playwright, libsql, and unpdf are listed in `serverExternalPackages` in `next.config.ts`. Server Actions have a configured 50 MB body limit, although the reviewed features primarily use route handlers rather than Server Actions.
 
@@ -718,7 +718,7 @@ These are current-source facts to preserve or address intentionally, not claims 
 10. **SRS regeneration is broad by default:** generating from one SRS replaces the project's full case set unless `replace: false` is supplied. Visual generation appends by default; repeated visual generation can therefore create repeated interactions intentionally.
 11. **Visual assertions have limited oracles:** pixel change and region change do not establish semantic correctness or exact control state.
 12. **Custom n8n nodes are not stock-n8n executables:** compatibility refers to workflow JSON structure/import/export, not availability of RASQ-Ai custom nodes in n8n itself.
-13. **Starter metadata remains:** the package is versioned `1.1.0`, but its name (`nextjs-postgresql-template`) and unused PostgreSQL-related dependencies do not describe the actual libsql runtime.
+13. **Starter metadata resolved:** as of 2026-11-25 the package is named `rasq-ai`, carries `engines.node >=20.9.0`, and the unused `pg`/`@types/pg` dependencies were dropped; the runtime remains libsql.
 14. **No checked-in environment template/deployment manifest:** setup relies on source defaults and README; production topology is not defined here.
 15. **License text needs deliberate handling:** `LICENSE` is not a permissive open-source license. It names PT Radius Data Solusi, states machine/usage/redistribution restrictions, and retains template/source-code language that should be reviewed rather than silently ignored or rewritten.
 16. **AI gateway is synchronous:** the generic contract does not yet provide streaming, retries/failover, OAuth exchange, SigV4, mTLS, usage/cost metering, or provider health routing. Endpoint egress controls remain a deployment responsibility. See `ENTERPRISE_ROADMAP.md` for the recommended sequence.

@@ -20,6 +20,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { APP_VERSION } from "../lib/version";
 
 const BASE_URL = (process.env.RASQ_AI_URL ?? "http://127.0.0.1:3000").replace(/\/+$/, "");
 const API_KEY = process.env.RASQ_API_KEY ?? "";
@@ -47,7 +48,7 @@ function toolResult(result: { ok: boolean; status: number; body: string }) {
 
 const idemField = { idempotency_key: z.string().min(8).max(200).optional().describe("Optional Idempotency-Key (8–200 chars) to make retries of this mutating call safe; a 409 means the payload drifted for that key.") };
 
-const server = new McpServer({ name: "rasq-ai", version: "1.3.0" }, { instructions: "Read and limited safe-generation access to a RASQ-Ai QA automation server via its HTTP API. All calls are authenticated with the operator-issued key in RASQ_API_KEY; the server enforces scopes and audits mutations. No destructive, attending, or load-generating operations are exposed." });
+const server = new McpServer({ name: "rasq-ai", version: APP_VERSION }, { instructions: "Read and limited safe-generation access to a RASQ-Ai QA automation server via its HTTP API. All calls are authenticated with the operator-issued key in RASQ_API_KEY; the server enforces scopes and audits mutations. No destructive, attending, or load-generating operations are exposed." });
 
 server.registerTool("rasqai_health", {
   title: "Health check",
