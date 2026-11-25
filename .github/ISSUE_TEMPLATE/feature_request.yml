@@ -1,0 +1,133 @@
+name: Feature Request
+description: File a new feature request for RASQ-Ai. The template makes the request implementable with one zero-question start for the implementing agent.
+title: "[Feature Request] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Feature request template — RASQ-Ai
+
+        Fill every **[required]** field. The structuring keeps the request implementable with zero back-and-forth: see [docs/feature-requests/FEATURE_REQUEST_TEMPLATE.md](docs/feature-requests/FEATURE_REQUEST_TEMPLATE.md) and [docs/prompting/PROMPTING_CONVENTIONS.md](docs/prompting/PROMPTING_CONVENTIONS.md). Run `npm run validate:feature-request` on a filled doc to pre-flight it.
+
+  - type: input
+    id: request-id
+    attributes:
+      label: Request ID (optional)
+      description: Assigned next (e.g. `FR-2026-11-25-001`). Leave empty to let maintainers assign.
+      placeholder: FR-2026-11-25-001
+
+  - type: input
+    id: request-title
+    attributes:
+      label: Title (required) — imperative, ≤ 80 chars
+      placeholder: "Add browser-based clock skew detection to the performance API"
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / why (required)
+      description: What problem does this solve? What pain exists today? (Template §2)
+      placeholder: "Operators cannot tell whether a Playwright run's screenshots were taken after page-load, so `needs-review` from `manualReview` assertions gets reported as pass/fail without any time anchor."
+    validations:
+      required: true
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal / Desired behavior (required)
+      description: One paragraph describing the intended behavior in user-visible outcomes. (Template §3)
+      placeholder: "When a Playwright run starts, RASQ-Ai records a timestamp on the run, and screenshots are annotated with the capture time so reports can show the skew from page-load."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria (required) — checkable, one per line or `AC-N:` items
+      description: Observable outcomes a test/run/artifact can verify. (Template §4)
+      placeholder: |
+        AC-1: Run record includes run.startedAt (ISO timestamp)
+        AC-2: Screenshot filenames include the capture timestamp
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope (required)
+      description: "What is in scope and what is explicitly out of scope."
+      placeholder: |
+        In scope:
+        - Add run.startedAt to the runs schema
+        Out of scope:
+        - No changes to existing route shapes
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints & must-nots (required if any)
+      description: Non-negotiable behaviors the implementing agent must respect. (Template §6)
+      placeholder: |
+        - Must not change existing API route shapes or OpenAPI paths.
+        - Must not store provider keys in the database.
+        If there are none, write "None."
+
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Evidence & product invariants to respect (required)
+      description: Link GUARDRAILS.md G-numbers, MASTER_PROMPT.md invariants, etc. Prefer section numbers. (Template §7)
+      placeholder: "MASTER_PROMPT.md §2: never invent identifiers; preserve route shapes. GUARDRAILS.md G-8: reports built from recorded data."
+
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Expected deliverable (required)
+      description: Artifacts the agent should produce. (Template §8)
+      placeholder: |
+        - New route: src/app/api/<new>/route.ts
+        - Tests: <new focused tests per MASTER_PROMPT §6 / AGENT_GUIDE safety rules>
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation expected (required)
+      description: Commands the agent must run and outcomes expected. (Template §9)
+      placeholder: |
+        - npm run typecheck → clean
+        - npm run lint → 0 errors
+        - npm test → pass
+        - npm run build → succeeds
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation-prompt
+    attributes:
+      label: Implementation prompt — ready to paste into MASTER_PROMPT.md `{{TASK}}` (required)
+      description: Paste into the `{{TASK}}` slot of [MASTER_PROMPT.md](docs/MASTER_PROMPT.md). Keep the schema from Template §10.
+      placeholder: |
+        Task:
+        Current behavior:
+        Desired behavior:
+        Files already identified (optional):
+        Must remain compatible with:
+        Validation expected:
+        Out of scope:
+    validations:
+      required: true
+
+  - type: textarea
+    id: open-questions
+    attributes:
+      label: Open questions / assumptions (optional)
+      description: Anything the agent may reasonably need to ask. (Template §11)
+      placeholder: "Edge case not covered: ... — choice offered to the agent per MASTER_PROMPT: do not block on it."

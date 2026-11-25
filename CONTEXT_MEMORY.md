@@ -252,6 +252,7 @@ After that, Playwright's default headless launch works unchanged for the app's U
 | `npm run lint` | `eslint .` |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm test` | `tsx --test tests/*.test.ts` |
+| `npm run validate:feature-request <path>` | Pre-flight validator for `docs/feature-requests/*.md` (required sections + implementation-prompt slots) |
 | `cd desktop-agent && npm run typecheck` | Agent TypeScript checks |
 | `cd desktop-agent && npm test` | Mock-driver safety tests |
 | `cd desktop-agent && npm run build` | esbuild main/preload/headless bundles with Electron/RobotJS external |
