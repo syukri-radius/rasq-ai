@@ -10,6 +10,7 @@ Docs and tooling for a structured feature-request loop: a request filed on GitHu
 | [`../prompting/PROMPTING_CONVENTIONS.md`](../prompting/PROMPTING_CONVENTIONS.md) | Versioned prompting conventions for this repo — anatomy of a good task block, provenance, the pre-flight checklist before sending a request to an agent. |
 | [`../../../.github/ISSUE_TEMPLATE/feature_request.yml`](../../../.github/ISSUE_TEMPLATE/feature_request.yml) | GitHub issue form: every new issue carries the structured fields automatically (motivation, acceptance criteria, scope, must-nots, expected deliverable, implementation prompt). |
 | [`../../scripts/validate-feature-request.ts`](../../scripts/validate-feature-request.ts) | Pre-flight validator: `npm run validate:feature-request docs/feature-requests/your-request.md` checks required sections before implementation starts. |
+| [`implementation-prompts/ADR-0001-midscene-vision-agent-scan.md`](implementation-prompts/ADR-0001-midscene-vision-agent-scan.md) | ADR-0001 "Vision Agent (Beta) in Scan" implementation prompt — a paste-ready MASTER_PROMPT task block for an agentic session. |
 
 ## The loop
 
