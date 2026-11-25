@@ -8,8 +8,11 @@ import { fail, ok } from "@/lib/api";
 import { DATA_DIR } from "@/lib/runner";
 import { authorize } from "@/lib/agentAuth";
 import { projectAllowed, projectDeny, filterProjects } from "@/lib/projectAccess";
+import { contentLengthExceeds } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
+
+const MAX_UPLOAD_BYTES = Math.max(1, Number(process.env.RASQ_MAX_UPLOAD_MB ?? 100) || 100) * 1024 * 1024;
 
 export async function GET(req: Request) {
   const auth = await authorize(req, "screens:read");
@@ -27,11 +30,13 @@ export async function POST(req: Request) {
   const auth = await authorize(req, "screens:write");
   if ("response" in auth) return auth.response;
   const db = await getDb();
+  if (contentLengthExceeds(req, MAX_UPLOAD_BYTES)) return fail(`Recording too large (${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB max)`, 413, "payload_too_large");
   const form = await req.formData();
   const file = form.get("file");
   const projectId = String(form.get("projectId") ?? "");
   if (!(file instanceof File) || !projectId) return fail("file and projectId are required");
   if (!projectAllowed(auth.actor, projectId)) return projectDeny();
+  if (file.size > MAX_UPLOAD_BYTES) return fail(`Recording too large (${Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)} MB max)`, 413, "payload_too_large");
   const buf = Buffer.from(await file.arrayBuffer());
   const dir = path.join(DATA_DIR, "recordings");
   fs.mkdirSync(dir, { recursive: true });

@@ -4,17 +4,12 @@ import { auditLog } from "@/db/schema";
 import { fail, ok } from "@/lib/api";
 import { requireOperator } from "@/lib/agentAuth";
 import { maybeRunRetentionSweep } from "@/lib/retention";
+import { csvCell } from "@/lib/csv";
 
 export const dynamic = "force-dynamic";
 
 const MAX_PAGE = 1000;
 const MAX_CSV_ROWS = 10_000;
-
-const csvCell = (v: unknown) => {
-  let s = v === null || v === undefined ? "" : String(v);
-  if (/^[=+\-@\t]/.test(s)) s = `'${s}`; // spreadsheet formula-injection guard
-  return `"${s.replace(/"/g, '""')}"`;
-};
 
 /**
  * Operator-only audit trail query/export.

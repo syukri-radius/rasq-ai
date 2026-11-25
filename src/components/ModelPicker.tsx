@@ -13,7 +13,6 @@ export default function ModelPicker({ task, onChange }: { task: Task; onChange?:
   const [s, setS] = useState<Settings | null>(null);
   const load = useCallback(async () => setS(await api<Settings>("/api/settings")), []);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
   const route = s?.routes.find((r) => r.task === task);

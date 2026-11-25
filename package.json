@@ -1,5 +1,5 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "rasq-ai",
   "version": "1.3.0",
   "private": true,
   "scripts": {
@@ -11,7 +11,9 @@
     "test": "tsx --test tests/*.test.ts",
     "agent:key": "tsx scripts/create-agent-key.ts",
     "mcp": "tsx src/mcp/server.ts",
-    "retention": "tsx scripts/retention-sweep.ts"
+    "retention": "tsx scripts/retention-sweep.ts",
+    "db:generate": "drizzle-kit generate",
+    "desktop:test": "npm --prefix desktop-agent test"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
@@ -22,7 +24,6 @@
     "fflate": "0.8.2",
     "lucide-react": "^1.70.0",
     "next": "^16.4.5",
-    "pg": "8.20.0",
     "playwright": "^1.65.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
@@ -33,16 +34,22 @@
   "devDependencies": {
     "@tailwindcss/postcss": "4.1.17",
     "@types/node": "22.19.15",
-    "@types/pg": "8.18.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "^0.18.1",
     "eslint": "9.39.4",
-    "eslint-config-next": "^15.5.29",
+    "eslint-config-next": "^16.4.6",
     "postcss": "^8.5.32",
     "tailwindcss": "4.1.17",
     "tsx": "4.20.6",
     "typescript": "5.9.3"
+  },
+  "description": "RASQ-Ai \u2014 trustworthy visual test automation: zero-DOM optical automation with Playwright execution evidence",
+  "repository": {
+    "url": "git+https://github.com/syukri-radius/rasq-ai.git"
+  },
+  "engines": {
+    "node": ">=20.9.0"
   },
   "allowScripts": {
     "es5-ext@0.10.64": true,

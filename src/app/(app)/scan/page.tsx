@@ -76,7 +76,6 @@ export default function ScanPage() {
     setSaved(await api<SavedScreen[]>(`/api/screens?projectId=${current.id}`));
     setRecs(await api<SavedRec[]>(`/api/recordings?projectId=${current.id}`));
   }, [current]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void refresh(); setCapture((c) => ({ ...c, url: current?.targetUrl ?? "" })); }, [refresh, current]);
 
   const ingest = useCallback((src: CanvasImageSource, w: number, h: number, tMs: number, dataUrl: string) => {
@@ -150,7 +149,7 @@ export default function ScanPage() {
   function stop() {
     if (stateRef.current === "idle") return;
     if (stateRef.current === "recording") { sample(); clock.current.acc += Date.now() - clock.current.start; }
-    mr.current?.state !== "inactive" && mr.current?.stop();
+    if (mr.current && mr.current.state !== "inactive") mr.current.stop();
     cleanup(); setRS("idle"); setElapsed(clock.current.acc);
     setMsg({ kind: "ok", text: "Recording stopped. Review the page groups, then save the recording and screens." });
   }

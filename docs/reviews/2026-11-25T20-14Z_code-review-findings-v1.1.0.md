@@ -1,11 +1,11 @@
 # RASQ-Ai — Repository Review Findings
 
-**Document version:** 1.0.0
-**Date:** 2026-11-25 (UTC)
+**Document version:** 1.1.0
+**Date:** 2026-11-25 (UTC) — v1.0.0 at 19:54Z (review), v1.1.0 at 20:14Z (addendum: fixes verified)
 **Branch:** `arena/a88c4210-rasq-ai`
 **Base commit:** `365c12bfdc9376293175ee3ee221d274b449125f`
 **Reviewer:** Arena.ai Agent Mode
-**Scope:** static review of the full repository plus verification runs (`npm test`, `npm run typecheck`, `npm run lint`). No source files were modified.
+**Scope:** static review of the full repository plus verification runs (`npm test`, `npm run typecheck`, `npm run lint`, `npm run build`). See the addendum (end of document) for the fixes that landed after v1.0.0; findings below are as-written at review time.
 
 ### Verification baseline (as of 2026-11-25T19:54Z)
 - `npm test` → **63/63 pass**
@@ -129,3 +129,21 @@ Findings are ordered by value (highest first), not by category. Each item names 
 - `npm run build` was not executed; Next build-time behavior (route-rule linting, serverExternalPackages) was reviewed statically only.
 - Runtime smoke tests (actual Playwright runs, JMeter CLI, desktop agent on Windows x64) were out of scope; README explicitly states JMeter CLI and real desktop execution are unvalidated.
 - No files other than this document were created or modified; the working tree is otherwise clean relative to `365c12b`.
+
+---
+
+## Addendum — v1.1.0 (2026-11-25T20:14Z): fixes landed and verified
+
+The following findings were addressed on this branch after v1.0.0. Verification re-run after the changes: `npm test` → **72/72 pass** (63 prior + 9 new in `tests/security.test.ts`), `npm run typecheck` → **clean**, `npm run lint` → **0 errors, 0 warnings**, `npm run build` → **succeeds** (13 static pages, all API routes compiled), `desktop-agent` → `npm ci --ignore-scripts` + `npm test` → **7/7 pass**, `npm run typecheck` (desktop-agent) → **clean**.
+
+- **#1 Provider env-name exfiltration — fixed.** New `src/lib/providerPolicy.ts`: `apiKeyEnv` must be on a server-side allowlist (built-in provider names + operator extension via `RASQ_PROVIDER_KEY_ENVS`); infrastructure secrets (`AWS_*`, `RASQ_*`, `DATABASE_URL`, …) are denied even by the extension. Provider `baseUrl` on non-loopback private hosts rejected by default (`RASQ_PROVIDERS_ALLOW_PRIVATE=1` permits LAN, `=0` blocks loopback too). Wired into `src/app/api/providers/route.ts`.
+- **#2 SSRF guard — fixed.** `assertSafeUrl()` is now async and checks literal IPs plus DNS answers (`node:dns/promises lookup`) against private/loopback/link-local/reserved ranges; `/demo-target` loopback stays allowed by default via tri-state `RASQ_TARGET_ALLOW_PRIVATE` (`1`=LAN allowed, `0`=loopback blocked). New `src/lib/netGuard.ts`. Viewport dims clamped to ≥100 px in `src/app/api/capture/route.ts`. NOT a DNS-rebinding defense (documented in README).
+- **#3 Webhook receiver validation — fixed.** `src/app/api/webhooks/route.ts` now requires https except loopback receivers (`RASQ_WEBHOOKS_ALLOW_HTTP=1` to opt out), and blocks non-public hosts by default (`RASQ_WEBHOOKS_ALLOW_PRIVATE=1` to permit). README updated.
+- **#4 CSV formula injection — fixed.** Shared helper `src/lib/csv.ts` (`csvCell`) used by both `src/app/api/audit/route.ts` and `src/app/api/tests/export/route.ts`; test-case CSV now neutralizes `= + - @ \t` prefixes. Covered by `tests/security.test.ts`.
+- **#5 Unbounded bodies — fixed.** `src/lib/api.ts` `body()` now refuses to parse bodies over 10 MB (configurable) and never throws into unguarded callers; 40 MB caps + explicit 413 `payload_too_large` on `/api/screens`, `/api/ai/scan`, `/api/recordings` (100 MB upload cap via `RASQ_MAX_UPLOAD_MB`); screen dimensions validated (1–16384).
+- **#7 CI + toolchain — fixed.** New `.github/workflows/ci.yml` (web: lint/typecheck/test/build on Node 22; desktop-agent: typecheck + tests with `--ignore-scripts` since robotjs is native). `eslint-config-next` bumped to ^16.4.6 and `eslint.config.mjs` moved to native flat config (no FlatCompat); the 8 stale `eslint-disable react-hooks/set-state-in-effect` directives deleted; `react-hooks/set-state-in-effect` and `purity` stay off deliberately (documented in config). `desktop-agent/**` excluded from root lint.
+- **#8 Package metadata — fixed.** Renamed package `nextjs-postgresql-template` → `rasq-ai` (lock updated), added `description`/`repository`/`engines.node >=20.9.0`, dropped unused `pg`/`@types/pg`, added `db:generate` and `desktop:test` scripts, MCP server now imports `APP_VERSION` instead of a hardcoded copy, new `.env.example` covering all `RASQ_*` variables.
+- **#9 Budget-before-scope ordering — fixed.** `src/lib/agentAuth.ts` `authorize()` now checks scope (403) before consuming the mutation budget (429/503).
+- **Not addressed (tracked for future work):** #6 idempotency expansion (needs a per-route safety review), #10 webhook/run outbox (design decision: resend endpoint vs outbox table), missing tests #1–6 in the findings, documentation gaps beyond the README/env-example updates made here.
+
+Also note: desktop-agent `npm ci` fails in this sandbox on robotjs's native build; the test suite runs fine with `npm ci --ignore-scripts`, which is what CI uses.

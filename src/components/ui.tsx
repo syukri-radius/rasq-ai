@@ -31,7 +31,6 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     setId((cur) => (list.some((p) => p.id === cur) ? cur : localStorage.getItem("rasq.project") && list.some((p) => p.id === localStorage.getItem("rasq.project")) ? localStorage.getItem("rasq.project")! : (list.find((p) => p.surface === "web") ?? list[0])?.id ?? ""));
   }, []);
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void reload();
   }, [reload]);
   const setCurrent = (v: string) => {

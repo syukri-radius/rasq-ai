@@ -1,6 +1,7 @@
 import { getDb } from "@/db";
 import { buildSystem, callModel, errMsg, parseJson, provenanceOf, resolveRoute, untrusted } from "@/lib/ai";
 import { body, fail, ok } from "@/lib/api";
+import { contentLengthExceeds } from "@/lib/api";
 import { AiScanSchema } from "@/lib/schemas";
 import { CONTROL_TYPES } from "@/lib/types";
 import { authorize } from "@/lib/agentAuth";
@@ -13,8 +14,11 @@ type Cand = { id: string; x: number; y: number; w: number; h: number; type: stri
 export async function POST(req: Request) {
   const auth = await authorize(req, "ai:scan");
   if ("response" in auth) return auth.response;
-  const b = await body<{ name?: string; width: number; height: number; imageDataUrl: string; candidates: Cand[] }>(req);
-  if (!b.imageDataUrl || !b.width || !b.height || !Array.isArray(b.candidates)) return fail("imageDataUrl, width, height and candidates are required");
+  const MAX_BODY_BYTES = 40 * 1024 * 1024;
+  if (contentLengthExceeds(req, MAX_BODY_BYTES)) return fail("AI scan payload too large (40 MB max)", 413, "payload_too_large");
+  const b = await body<{ name?: string; width: number; height: number; imageDataUrl: string; candidates: Cand[] }>(req, MAX_BODY_BYTES);
+  if (!b.imageDataUrl || !Number.isFinite(b.width) || !Number.isFinite(b.height) || b.width < 1 || b.height < 1 || !Array.isArray(b.candidates)) return fail("imageDataUrl, width, height and candidates are required");
+  if (typeof b.imageDataUrl === "string" && b.imageDataUrl.length > 30 * 1024 * 1024) return fail("Screen image too large (30 MB of base64 max)", 413, "payload_too_large");
   try {
     const db = await getDb();
     const route = await resolveRoute(db, "visual_scan");
@@ -26,7 +30,7 @@ Use type null for candidates that are not supported visual test objects. Do not 
 Taxonomy: text is ordinary read-only copy; w_button is only a standard OS main-window minimize/maximize/restore/close button; w_text is only the OS main-window title; s_input is one composite search field including its adjacent search icon/button; p_input is a masked or explicitly identified password input; p_button requires push-and-hold; h_button requires hover; timer is a visible clock; gesture_arena is a bounded signature/gesture capture area. Static pixels do not prove hold, hover, realtime, masking, or gesture behavior, so use those types only with explicit visible evidence and state the uncertainty in evidence. Otherwise use a more general type. Do not infer font values or OCR wording that is not legible.
 For a search composite, preserve candidate coordinates only when they already cover the whole group. Otherwise mark the partial candidate null and return one missed s_input with union bounds covering the field and adjacent search icon/button; do not also return its inner pieces as separate objects.`,
     );
-    const cands = b.candidates.slice(0, 120).map((c) => ({ candidateId: c.id, x: c.x, y: c.y, w: c.w, h: c.h, perceptionGuess: c.type, perceptionConfidence: c.confidence }));
+    const cands = b.candidates.slice(0, 120).map((c) => ({ candidateId: c.id, x: Number(c.x) || 0, y: Number(c.y) || 0, w: Number(c.w) || 0, h: Number(c.h) || 0, perceptionGuess: String(c.type ?? "").slice(0, 60), perceptionConfidence: Number(c.confidence) || 0 }));
     const user = `Screen "${(b.name ?? "").slice(0, 80)}" source size ${b.width}x${b.height}. The image is attached. Candidate boxes from RASQ-Ai perception (geometry only):\n${untrusted("candidates", JSON.stringify(cands))}`;
     const raw = await callModel(route, { system, user, images: [b.imageDataUrl] });
     const parsed = AiScanSchema.parse(parseJson(raw));

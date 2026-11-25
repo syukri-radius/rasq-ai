@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db";
-import { controls, requirementDocs, requirements, screens, testCases, testTraceability } from "@/db/schema";
+import { controls, requirements, screens, testCases, testTraceability } from "@/db/schema";
 import { buildSystem, callModel, errMsg, parseJson, provenanceOf, redact, resolveRoute, untrusted } from "@/lib/ai";
 import { body, fail, ok } from "@/lib/api";
 import { AiTestCaseSchema, AiTestsSchema, AiVisualTestCaseSchema } from "@/lib/schemas";

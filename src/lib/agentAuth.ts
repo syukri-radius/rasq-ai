@@ -150,6 +150,11 @@ export async function authorize(req: Request, scope: ApiKeyScope): Promise<{ act
   const action = actionLabel(req);
   const mutation = req.method !== "GET" && req.method !== "HEAD";
   if (actor.kind === "agent") {
+    // Scope check first: an unauthorized call must not burn the key's rate/daily budget.
+    if (!actor.scopes.includes(scope)) {
+      await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: `missing scope ${scope}`, ip: clientIp(req) });
+      return { response: fail(`API key is missing the required scope: ${scope}`, 403, "insufficient_scope") };
+    }
     if (mutation) {
       try {
         const budget = await consumeAgentMutationBudget(await getDb(), actor.id, { dailyMutationLimit: actor.dailyMutationLimit });
@@ -163,10 +168,6 @@ export async function authorize(req: Request, scope: ApiKeyScope): Promise<{ act
         await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: "rate limiter unavailable (fail-closed)", ip: clientIp(req) });
         return { response: fail("Rate limiter unavailable; mutation refused (fail-closed). Retry later.", 503, "rate_limiter_unavailable") };
       }
-    }
-    if (!actor.scopes.includes(scope)) {
-      await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "denied", detail: `missing scope ${scope}`, ip: clientIp(req) });
-      return { response: fail(`API key is missing the required scope: ${scope}`, 403, "insufficient_scope") };
     }
     if (mutation) await recordAudit({ actorType: "agent", actorId: actor.id, actorName: actor.name, action, status: "ok", detail: `scope ${scope}`, ip: clientIp(req) });
     return { actor };

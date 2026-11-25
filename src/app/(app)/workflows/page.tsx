@@ -65,7 +65,6 @@ function Editor() {
     setWfId((c) => deepLinked ?? (l.some((w) => w.id === c) ? c : l[0]?.id ?? ""));
     if (deepLinked) window.history.replaceState(null, "", window.location.pathname);
   }, [current]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void loadList(); }, [loadList]);
 
   const loadRuns = useCallback(async (id: string) => setRuns(await api<Run[]>(`/api/runs?workflowId=${id}`)), []);

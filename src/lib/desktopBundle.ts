@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { strFromU8, unzipSync, zipSync } from "fflate";
 import type { DesktopCompilation } from "./desktopCompiler";
 import { renderRobotScript } from "./desktopScript";
 import {

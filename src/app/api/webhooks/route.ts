@@ -6,6 +6,7 @@ import { body, fail, ok } from "@/lib/api";
 import { requireOperator } from "@/lib/agentAuth";
 import { recordAudit, clientIp } from "@/lib/audit";
 import { WEBHOOK_EVENTS, generateWebhookSecret, isWebhookEvent } from "@/lib/webhooks";
+import { blockedReason, isLoopbackHostname } from "@/lib/netGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,11 @@ const CreateSchema = z
   .strict();
 const PatchSchema = z.object({ id: z.string().uuid(), enabled: z.boolean() }).strict();
 
+/**
+ * Receivers should be HTTPS endpoints. Plain HTTP is accepted only for loopback receivers
+ * (local development/testing) or when the operator sets RASQ_WEBHOOKS_ALLOW_HTTP=1.
+ * Non-public hosts require RASQ_WEBHOOKS_ALLOW_PRIVATE=1 (trusted single-operator LAN).
+ */
 function validateUrl(raw: string): string {
   let url: URL;
   try {
@@ -30,6 +36,12 @@ function validateUrl(raw: string): string {
   }
   if (!/^https?:$/.test(url.protocol)) throw new Error("url must use http(s).");
   if (url.username || url.password) throw new Error("url must not contain credentials; use your receiver's auth on its side.");
+  const allowHttp = process.env.RASQ_WEBHOOKS_ALLOW_HTTP === "1" || process.env.RASQ_WEBHOOKS_ALLOW_HTTP === "true";
+  if (url.protocol === "http:" && !isLoopbackHostname(url.hostname) && !allowHttp) {
+    throw new Error("url must use https (http is allowed only for loopback receivers or with RASQ_WEBHOOKS_ALLOW_HTTP=1).");
+  }
+  const reason = blockedReason(url.hostname, [], process.env.RASQ_WEBHOOKS_ALLOW_PRIVATE);
+  if (reason) throw new Error(`url host is not allowed: ${reason}. Set RASQ_WEBHOOKS_ALLOW_PRIVATE=1 only on trusted networks.`);
   return url.toString();
 }
 

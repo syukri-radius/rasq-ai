@@ -4,6 +4,7 @@ import { aiProviders, modelRoutes } from "@/db/schema";
 import { AI_PROTOCOLS, ProviderConfigSchema } from "@/lib/aiContract";
 import { body, fail, ok } from "@/lib/api";
 import { authorize } from "@/lib/agentAuth";
+import { allowedEnvName, allowedBaseUrl } from "@/lib/providerPolicy";
 
 type P = { id?: string; name?: string; kind?: string; baseUrl?: string; apiKeyEnv?: string; models?: string[]; enabled?: boolean; config?: unknown };
 
@@ -12,11 +13,17 @@ function validateEndpoint(value: string): void {
   if (!/^https?:\/\//.test(value)) throw new Error("baseUrl must be an HTTP(S) URL or generic JSON endpoint.");
   const url = new URL(value);
   if (url.username || url.password) throw new Error("Provider URLs must not contain credentials. Use apiKeyEnv and {{apiKey}} header templates.");
+  const verdict = allowedBaseUrl(url.toString());
+  if (!verdict.ok) throw new Error(verdict.reason);
 }
 
 function clean(b: P) {
   const apiKeyEnv = (b.apiKeyEnv ?? "").trim();
-  if (apiKeyEnv && !/^[A-Z][A-Z0-9_]{1,63}$/.test(apiKeyEnv)) throw new Error("apiKeyEnv must be an environment variable NAME (e.g. OPENAI_API_KEY), never the key itself.");
+  if (apiKeyEnv) {
+    if (!/^[A-Z][A-Z0-9_]{1,63}$/.test(apiKeyEnv)) throw new Error("apiKeyEnv must be an environment variable NAME (e.g. OPENAI_API_KEY), never the key itself.");
+    const verdict = allowedEnvName(apiKeyEnv);
+    if (!verdict.ok) throw new Error(verdict.reason);
+  }
   const kind = b.kind ?? "openai";
   if (!(AI_PROTOCOLS as readonly string[]).includes(kind)) throw new Error(`kind must be ${AI_PROTOCOLS.join(", ")}`);
   const baseUrl = (b.baseUrl ?? "").trim();
