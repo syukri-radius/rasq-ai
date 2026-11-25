@@ -223,7 +223,7 @@ export const controls = sqliteTable("controls", {
   locatorHash: text("locator_hash").notNull().default(""),
   perceptionLabel: text("perception_label").notNull().default(""),
   aiModel: text("ai_model"),
-  source: text("source").notNull().default("perception"),
+  source: text("source").notNull().default("perception"), // perception | ai | vision_agent (additive provenance; no enum migration)
   createdAt: createdAt(),
 });
 

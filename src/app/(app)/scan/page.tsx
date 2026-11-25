@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Circle, Pause, Play, Square, X, Upload, Sparkles, Save, Trash2, Camera, Pencil } from "lucide-react";
+import VisionAgentPanel from "@/components/VisionAgentPanel";
 import ModelPicker from "@/components/ModelPicker";
 import { api, Badge, Btn, Card, inputCls, Notice, PageHeader, useProject } from "@/components/ui";
 import { addFrame, analyze, dhash, type Candidate, type PageGroup } from "@/lib/perception";
@@ -10,7 +11,7 @@ import { CONTROL_TYPES, PERCEPTION_MODEL, type ControlType } from "@/lib/types";
 type Item = {
   id: string; x: number; y: number; w: number; h: number;
   type: ControlType | "unknown"; label: string; confidence: number; evidence: string; hash: string;
-  include: boolean; source: "perception" | "ai"; perceptionType: string; aiModel: string | null;
+  include: boolean; source: "perception" | "ai" | "vision_agent"; perceptionType: string; aiModel: string | null;
   controlId?: string;
 };
 type SavedControl = { id: string; type: ControlType; label: string; x: number; y: number; w: number; h: number; confidence: number; evidence: string; locatorHash: string; perceptionLabel: string; aiModel: string | null; source: string };
@@ -42,7 +43,9 @@ async function regionHash(dataUrl: string, b: { x: number; y: number; w: number;
 
 export default function ScanPage() {
   const { current } = useProject();
-  const [tab, setTab] = useState<"record" | "upload" | "capture">("record");
+  const [tab, setTab] = useState<"record" | "upload" | "capture" | "vision">("record");
+  const [visionEnabled, setVisionEnabled] = useState(false);
+  useEffect(() => { void api<{ enabled: boolean }>("/api/vision-agent").then(r => setVisionEnabled(r.enabled)).catch(() => {}); }, []);
   const [groups, setGroups] = useState<PageGroup[]>([]);
   const [items, setItems] = useState<Record<string, Item[]>>({});
   const [sel, setSel] = useState("");
@@ -249,7 +252,7 @@ export default function ScanPage() {
           evidence: c.evidence,
           hash: c.locatorHash,
           include: true,
-          source: c.source === "ai" ? "ai" : "perception",
+          source: c.source === "vision_agent" ? "vision_agent" : c.source === "ai" ? "ai" : "perception",
           perceptionType: c.perceptionLabel.split(":").pop() || c.type,
           aiModel: c.aiModel,
         }));
@@ -330,7 +333,7 @@ export default function ScanPage() {
           frameCount: g.frames,
           timestampMs: g.rep.tMs,
           aiModel: ctl.find((c) => c.aiModel)?.aiModel ?? null,
-          controls: ctl.map((c) => ({ id: c.controlId, type: c.type, label: c.label, x: c.x, y: c.y, w: c.w, h: c.h, confidence: c.confidence, evidence: c.evidence, locatorHash: c.hash, perceptionLabel: `${PERCEPTION_MODEL}:${c.perceptionType}`, aiModel: c.aiModel, source: c.source })),
+          controls: ctl.map((c) => ({ id: c.controlId, type: c.type, label: c.label, x: c.x, y: c.y, w: c.w, h: c.h, confidence: c.confidence, evidence: c.evidence, locatorHash: c.hash, perceptionLabel: c.source === "vision_agent" ? `midscene:${c.perceptionType}` : `${PERCEPTION_MODEL}:${c.perceptionType}`, aiModel: c.aiModel, source: c.source })),
         };
         let savedControls: { id: string }[];
         if (meta) {
@@ -380,10 +383,11 @@ export default function ScanPage() {
       <div className="mb-4 grid gap-4 lg:grid-cols-[360px_1fr]">
         <Card title="Evidence source">
           <div className="mb-3 flex gap-1 rounded-lg bg-well p-1 text-sm">
-            {(["record", "upload", "capture"] as const).map((t) => (
-              <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-2 py-1 capitalize ${tab === t ? "bg-raised font-semibold text-ink shadow-sm" : "text-muted"}`}>{t === "capture" ? "Capture URL" : t === "upload" ? "Upload" : "Record screen"}</button>
+            {(["record", "upload", "capture", ...(visionEnabled ? ["vision" as const] : [])] as const).map((t) => (
+              <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-2 py-1 capitalize ${tab === t ? "bg-raised font-semibold text-ink shadow-sm" : "text-muted"}`}>{t === "vision" ? "Vision Agent (Beta)" : t === "capture" ? "Capture URL" : t === "upload" ? "Upload" : "Record screen"}</button>
             ))}
           </div>
+          {tab === "vision" && visionEnabled && <VisionAgentPanel key={current?.id} projectId={current?.id} regionHash={regionHash} onSaved={refresh} />}
           {tab === "record" && (
             <div className="space-y-3">
               <div className="flex items-center gap-3 rounded-lg border bg-well px-4 py-3 text-ink">
@@ -485,7 +489,7 @@ export default function ScanPage() {
                           <option value="unknown">— none —</option>
                           {CONTROL_TYPES.map((t) => <option key={t} value={t}>{t.replace("_", " ")}</option>)}
                         </select>
-                        <div className="mt-1"><Badge tone={i.source === "ai" ? undefined : "pending"}>{i.source === "ai" ? `AI ${i.aiModel ?? ""}` : "perception"}</Badge></div>
+                        <div className="mt-1"><Badge tone={i.source !== "perception" ? undefined : "pending"}>{i.source === "vision_agent" ? `Vision Agent ${i.aiModel ?? ""}` : i.source === "ai" ? `AI ${i.aiModel ?? ""}` : "perception"}</Badge></div>
                       </td>
                       <td className="p-1"><input value={i.label} placeholder="visible label" onChange={(e) => upd(i.id, { label: e.target.value })} className="w-full rounded border px-1 py-0.5" /><div className="mt-1 text-[10px] leading-snug text-muted">{i.evidence}</div></td>
                       <td className="p-1">{i.confidence.toFixed(2)}</td>
