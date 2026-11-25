@@ -780,3 +780,12 @@ After a task, update this file when any relevant fact changes:
 - **Snapshot:** replace the reviewed commit/date and state what was actually validated.
 
 Keep historical claims tied to their snapshot. Do not record speculative plans as completed capabilities, and do not store secrets, real customer evidence, local database contents, or provider responses in this memory.
+
+## 2026-11-25 — Scan Vision Agent Beta (Option C, Phase 1)
+
+- Added `src/lib/visionAgent/` RASQ DTO/service boundary, existing-perception adapter and optional server-managed Midscene Playwright adapter. `RASQ_VISION_AGENT=midscene` enables the Scan tab; unset is off. Plain OpenAI-compatible `visual_scan` routes only; no new task or DB migration. Operator-only, consent-required discovery plus optional visual assertion; no NL actions/scenarios.
+- Captures/redirects/subrequests reuse `runner.assertSafeUrl` without changing the shared gate. One bounded isolated browser per request, cleanup/cancellation, screenshot and proposal caps, shared policy/redaction, audit metadata, server-only instance credentials, SDK raw logging/report/cache suppression.
+- Explicitly selected/confirmed snapshots save through `/api/screens` with `vision_agent` provenance and actual pixel dHashes. Optional idempotency support added to screen POST. Existing saved-scan editor preserves new provenance; confirmed test drafts reuse append-only visual generation with returned screen IDs.
+- Validation: typecheck and lint clean; 82 tests passed; production build passed with 13 static pages and the new API route. Real temporary Chromium launcher smoke passed live capture, mocked SDK discovery/assertion, metadata redirect rejection and cleanup. No external AI model was called.
+- Phase boundary: ephemeral timeline/model assertions are **not** executed test evidence. Persisted NL `runs`/`run_steps` remain ADR §3.3 Phase 2 (existing runs require a real workflow); no synthetic workflow/run was created.
+- Dependency audit reports 14 high / 1 moderate production findings after installing pinned Midscene 1.18.2 and its runtime Playwright test peer. Controlled pilot only pending dependency review. See `docs/vision-agent-beta.md` for enablement, supported routes, governance and limitations.

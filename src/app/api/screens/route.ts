@@ -1,3 +1,5 @@
+import { NextResponse } from "next/server";
+import { beginIdempotency } from "@/lib/idempotency";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import fs from "node:fs";
 import path from "node:path";
@@ -49,6 +51,8 @@ export async function POST(req: Request) {
   if (m[2].length > MAX_IMAGE_CHARS) return fail("Screen image too large (30 MB of base64 max)", 413, "payload_too_large");
   if (b.width < 1 || b.height < 1 || b.width > 16384 || b.height > 16384) return fail("width/height out of range (1–16384)", 400, "validation_failed");
   if (!projectAllowed(auth.actor, b.projectId)) return projectDeny();
+  const idem = await beginIdempotency(req, auth.actor, "POST /api/screens", b);
+  if (idem instanceof NextResponse) return idem;
   const dir = path.join(DATA_DIR, "screens");
   fs.mkdirSync(dir, { recursive: true });
   const file = `${crypto.randomUUID()}.${m[1] === "jpeg" ? "jpg" : m[1]}`;
@@ -61,5 +65,7 @@ export async function POST(req: Request) {
   const savedControls = valid.length
     ? await db.insert(controls).values(valid.map((c) => ({ ...c, id: crypto.randomUUID(), screenId: s.id }))).returning()
     : [];
-  return ok({ ...s, controls: savedControls, controlCount: valid.length }, 201);
+  const payload = { ...s, controls: savedControls, controlCount: valid.length };
+  await idem.store(201, payload);
+  return ok(payload, 201);
 }
