@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
+    "validate:feature-request": "tsx scripts/validate-feature-request.ts",
     "agent:key": "tsx scripts/create-agent-key.ts",
     "mcp": "tsx src/mcp/server.ts",
     "retention": "tsx scripts/retention-sweep.ts",
