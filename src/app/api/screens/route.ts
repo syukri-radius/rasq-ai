@@ -9,8 +9,13 @@ import { PERCEPTION_MODEL } from "@/lib/types";
 import { DATA_DIR } from "@/lib/runner";
 import { authorize } from "@/lib/agentAuth";
 import { projectAllowed, projectDeny, filterProjects, recordingProjectId } from "@/lib/projectAccess";
+import { contentLengthExceeds } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
+
+/** Screenshots can be large; cap the JSON envelope at 40 MB (base64 included). */
+const MAX_BODY_BYTES = 40 * 1024 * 1024;
+const MAX_IMAGE_CHARS = 30 * 1024 * 1024;
 
 export async function GET(req: Request) {
   const auth = await authorize(req, "screens:read");
@@ -37,9 +42,12 @@ export async function POST(req: Request) {
   const auth = await authorize(req, "screens:write");
   if ("response" in auth) return auth.response;
   const db = await getDb();
-  const b = await body<{ projectId: string; recordingId?: string | null; name: string; groupKey?: string; source?: string; width: number; height: number; imageDataUrl: string; frameCount?: number; timestampMs?: number; aiModel?: string | null; controls: InControl[] }>(req);
+  if (contentLengthExceeds(req, MAX_BODY_BYTES)) return fail("Screen payload too large (40 MB max)", 413, "payload_too_large");
+  const b = await body<{ projectId: string; recordingId?: string | null; name: string; groupKey?: string; source?: string; width: number; height: number; imageDataUrl: string; frameCount?: number; timestampMs?: number; aiModel?: string | null; controls: InControl[] }>(req, MAX_BODY_BYTES);
   const m = /^data:image\/(png|jpeg|webp);base64,(.+)$/.exec(b.imageDataUrl ?? "");
-  if (!b.projectId || !m || !b.width || !b.height) return fail("projectId, width, height and a PNG/JPEG/WebP imageDataUrl are required");
+  if (!b.projectId || !m || !Number.isFinite(b.width) || !Number.isFinite(b.height)) return fail("projectId, width, height and a PNG/JPEG/WebP imageDataUrl are required");
+  if (m[2].length > MAX_IMAGE_CHARS) return fail("Screen image too large (30 MB of base64 max)", 413, "payload_too_large");
+  if (b.width < 1 || b.height < 1 || b.width > 16384 || b.height > 16384) return fail("width/height out of range (1–16384)", 400, "validation_failed");
   if (!projectAllowed(auth.actor, b.projectId)) return projectDeny();
   const dir = path.join(DATA_DIR, "screens");
   fs.mkdirSync(dir, { recursive: true });

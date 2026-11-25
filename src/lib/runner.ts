@@ -10,14 +10,40 @@ import { hashSimilarity } from "./perception";
 import { isReviewOnlyControlType, type RunStatus } from "./types";
 import { notifyWebhooks, runCompletedData, loadRunForEvent } from "./webhooks";
 
+import { lookup } from "node:dns/promises";
+import { blockedReason } from "./netGuard";
 export const DATA_DIR = path.resolve(process.cwd(), "data");
 export const baseUrl = () => `http://127.0.0.1:${process.env.PORT ?? 3000}`;
 export const resolveUrl = (u: string) => (u.startsWith("/") ? baseUrl() + u : u);
 
-export function assertSafeUrl(u: string): URL {
+/**
+ * Target gate for Playwright navigation/capture. Blocks non-HTTP(S) schemes, well-known
+ * metadata endpoints, and private/loopback/link-local/reserved destinations — both for
+ * literal IPs and for hostnames whose current DNS answers are non-public.
+ *
+ * Policy via RASQ_TARGET_ALLOW_PRIVATE: unset → loopback allowed (local dev /demo-target),
+ * other private ranges blocked; "1"/"true" → all private ranges allowed (trusted LAN);
+ * "0"/"false" → loopback blocked too. NOT a DNS-rebinding defense — put an egress proxy in
+ * front for hostile-tenant deployments.
+ */
+export async function assertSafeUrl(u: string): Promise<URL> {
   const url = new URL(resolveUrl(u));
   if (!/^https?:$/.test(url.protocol)) throw new Error("Only http(s) targets are allowed.");
-  if (/^(169\.254\.|metadata\.google)/.test(url.hostname)) throw new Error("Link-local / metadata addresses are blocked.");
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  if (/^169\.254\.|metadata\.google(\.internal)?$/.test(hostname)) throw new Error("Link-local / metadata addresses are blocked.");
+  let resolved: string[] = [];
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) && !hostname.includes(":")) {
+    // Literal IPs are checked directly; resolve DNS names to catch internal targets behind public-looking names.
+    try {
+      resolved = (await lookup(hostname, { all: true, verbatim: true })).map((a) => a.address);
+    } catch {
+      throw new Error(`Could not resolve target host "${hostname}".`);
+    }
+  } else {
+    resolved = [hostname];
+  }
+  const reason = blockedReason(hostname, resolved, process.env.RASQ_TARGET_ALLOW_PRIVATE);
+  if (reason) throw new Error(`Target "${hostname}" is blocked: ${reason}. Set RASQ_TARGET_ALLOW_PRIVATE=1 only on trusted networks.`);
   return url;
 }
 
@@ -32,7 +58,7 @@ async function launch(): Promise<Browser> {
 }
 
 export async function captureScreenshot(url: string, width: number, height: number): Promise<Buffer> {
-  const u = assertSafeUrl(url);
+  const u = await assertSafeUrl(url);
   const browser = await launch();
   try {
     const ctx = await browser.newContext({ viewport: { width, height } });
@@ -104,7 +130,7 @@ const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite
 async function openTarget(ctx: Ctx, p: Record<string, unknown>): Promise<Outcome> {
   ctx.vw = num(p.viewportWidth, 1280);
   ctx.vh = num(p.viewportHeight, 800);
-  const url = assertSafeUrl(String(p.url || ctx.targetUrl)).toString();
+  const url = (await assertSafeUrl(String(p.url || ctx.targetUrl))).toString();
   ctx.targetUrl = url;
   ctx.context = await ctx.browser.newContext({ viewport: { width: ctx.vw, height: ctx.vh }, acceptDownloads: true });
   ctx.helper = await ctx.context.newPage();
@@ -301,7 +327,7 @@ export async function startRun(workflowId: string, mode: "playwright" | "dry-run
   if (!wf) throw new Error("Workflow not found");
   const order = executionOrder(wf.n8n as unknown as N8nWorkflow);
   if (order.length === 0) throw new Error("Workflow has no nodes");
-  if (mode === "playwright" && targetUrl) assertSafeUrl(targetUrl);
+  if (mode === "playwright" && targetUrl) await assertSafeUrl(targetUrl);
   const [run] = await db.insert(runs).values({ workflowId, mode, targetUrl, status: "running" }).returning();
   await db.insert(runSteps).values(order.map((n, i) => ({ runId: run.id, position: i, nodeId: n.id, nodeName: n.name, nodeType: n.type, status: "pending" })));
   void executeRun(run.id, order, targetUrl, mode).catch(() => undefined);
