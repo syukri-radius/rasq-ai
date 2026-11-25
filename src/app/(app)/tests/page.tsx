@@ -44,7 +44,6 @@ export default function TestsPage() {
     setScreens(await api<Screen[]>(`/api/screens?projectId=${current.id}`));
     setSelectedScreens(null);
   }, [current]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
 
   const generate = async () => {

@@ -46,7 +46,6 @@ export default function ReportsPage() {
     setList(r);
     setSel((s) => r.find((x) => x.id === s?.id) ?? r[0] ?? null);
   }, [current]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
 
   return (

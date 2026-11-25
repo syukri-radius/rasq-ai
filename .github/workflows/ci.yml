@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  desktop-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop-agent/package-lock.json
+      # robotjs is a native module and Electron downloads a large binary on install;
+      # the tests exercise the mock driver, so install without scripts (no node-gyp needed).
+      - run: npm --prefix desktop-agent ci --ignore-scripts
+      - run: npm --prefix desktop-agent run typecheck --if-present
+      - run: npm run desktop:test

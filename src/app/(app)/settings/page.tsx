@@ -21,7 +21,6 @@ export default function SettingsPage() {
   const [edit, setEdit] = useState<Record<string, string>>({});
   const [configEdit, setConfigEdit] = useState<Record<string, string>>({});
   const load = useCallback(async () => setS(await api<S>("/api/settings")), []);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
   const run = async (f: () => Promise<unknown>, ok = "Saved") => {
     try { await f(); setMsg({ kind: "ok", text: ok }); await load(); } catch (e) { setMsg({ kind: "error", text: e instanceof Error ? e.message : "Failed" }); }

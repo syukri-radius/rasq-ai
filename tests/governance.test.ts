@@ -47,7 +47,6 @@ test("migration 0006 adds api_keys columns and usage_counters", async () => {
 });
 
 test("project-partitioned key is filtered on project list and 404s on foreign artifacts", async () => {
-  const db = await getDb();
   const projA = await makeProject("Gov Allowed");
   const projB = await makeProject("Gov Foreign");
   const { key } = await mint("partition-agent", ["projects:read", "tests:read", "projects:write"], { projectIds: [projA.id] });
@@ -121,7 +120,6 @@ test("usage counters are persisted per key and GC'd by retention", async () => {
 });
 
 test("audit query API is operator-only, filters, and CSV-escapes formula cells", async () => {
-  const db = await getDb();
   const audit = await import("../src/lib/audit");
   await audit.recordAudit({ actorType: "agent", actorId: "audit-target-key", actorName: "audit-target", action: "POST /api/tests", status: "ok", detail: "=cmd|'/c calc'!A0 formula-attempt", ip: "203.0.113.9" });
   const route = await import("../src/app/api/audit/route");
